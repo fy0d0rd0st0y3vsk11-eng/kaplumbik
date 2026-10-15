@@ -29,6 +29,26 @@ def _health(component: str, status: str, details: str = ""):
         record_health(component, status, details)
 
 
+def _next_game_link():
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    app = create_app()
+    with app.app_context():
+        event = db.session.execute(select(Event).where(Event.status == "scheduled", Event.starts_at >= datetime.now(timezone.utc)).order_by(Event.starts_at.asc()).limit(1)).scalar_one_or_none()
+        if event is None:
+            return None
+        game = event.game.casefold()
+        link = event.game_link
+        if not link and ("minecraft" in game or "realms" in game):
+            link = get_setting("minecraft_realms_link")
+        elif not link and "gartic" in game:
+            link = get_setting("gartic_phone_link")
+        if "among us" in game and not link:
+            code = event.room_code or get_setting("among_us_room_code")
+            return (event.game, f"Oda kodu: {code}") if code else (event.game, None)
+        return (event.game, link)
+
+
 async def _notify_owner(bot: commands.Bot, details: str):
     owner_id = await asyncio.to_thread(_setting, "designer_discord_id", settings.owner_discord_id)
     if not owner_id or not owner_id.isdigit():
@@ -106,6 +126,16 @@ class AssistantFeatures(commands.Cog):
         if any(term in lowered for term in ("among us kod", "among us code", "oda kodu", "code?")):
             code = await asyncio.to_thread(_setting, "among_us_room_code")
             await message.reply(f"🚀 Among Us oda kodu: **{code}**" if code else "Among Us oda kodu henüz ayarlanmamış.", mention_author=False)
+            return
+
+        if lowered.strip() in {"link", "link?", "link pls", "linki at", "link at", "bağlantı", "bağlantı?", "linki"}:
+            result = await asyncio.to_thread(_next_game_link)
+            if result and result[1]:
+                await message.reply(f"🔗 Yaklaşan {result[0]} etkinliği: {result[1]}", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            elif result:
+                await message.reply(f"Yaklaşan {result[0]} etkinliği için bağlantı/kod henüz ayarlanmamış.", mention_author=False)
+            else:
+                await message.reply("Şu anda yaklaşan etkinlik yok.", mention_author=False)
             return
 
         if self.bot.user and self.bot.user in message.mentions:

@@ -1,4 +1,6 @@
 
+import secrets
+
 from flask import Flask
 
 from app.core.config import settings
@@ -8,7 +10,13 @@ from app.database import init_database
 def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
 
-    app.config["SECRET_KEY"] = settings.secret_key
+    if settings.app_env.lower() == "production" and not settings.secret_key:
+        raise RuntimeError("Production ortamında SECRET_KEY zorunludur.")
+
+    app.config["SECRET_KEY"] = settings.secret_key or secrets.token_hex(32)
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = settings.app_env.lower() == "production"
     app.config["SQLALCHEMY_DATABASE_URI"] = (
         settings.database_url
     )

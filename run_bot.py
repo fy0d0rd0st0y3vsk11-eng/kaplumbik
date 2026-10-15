@@ -42,6 +42,12 @@ class KaplumbikBot(commands.Bot):
         await self.load_extension("app.events.rsvp")
         logger.info("Etkinlik katılım butonları yüklendi.")
 
+        await self.load_extension("app.events.assistant_features")
+        logger.info("AI, profil ve oyun bağlantısı özellikleri yüklendi.")
+
+        await self.load_extension("app.events.scheduler")
+        logger.info("Zamanlanmış duyuru sistemi yüklendi.")
+
     async def on_ready(self):
         logger.info(
             "Kaplumbik Discord'a bağlandı: %s (ID: %s)",

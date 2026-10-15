@@ -29,6 +29,17 @@ def _health(component: str, status: str, details: str = ""):
         record_health(component, status, details)
 
 
+async def _notify_owner(bot: commands.Bot, details: str):
+    owner_id = await asyncio.to_thread(_setting, "designer_discord_id", settings.owner_discord_id)
+    if not owner_id or not owner_id.isdigit():
+        return
+    try:
+        user = bot.get_user(int(owner_id)) or await bot.fetch_user(int(owner_id))
+        await user.send(f"⚠️ **Kaplumbik hata bildirimi**\n{details[:1500]}")
+    except Exception:
+        logger.exception("Could not send private admin alert")
+
+
 def _ai_request(prompt: str, personality: str) -> str:
     if not settings.openrouter_api_key:
         return "Şu an yapay zekâ bağlantım ayarlı değil. Yönetici panelinden AI anahtarını ortam değişkeni olarak eklemeli."
@@ -112,7 +123,8 @@ class AssistantFeatures(commands.Cog):
             except Exception as exc:
                 logger.exception("AI response failed")
                 await asyncio.to_thread(_health, "ai", "error", str(exc))
-                await message.reply("Şu an yanıt veremedim; hata yönetim panelindeki sağlık kayıtlarına işlendi.", mention_author=False)
+                await _notify_owner(self.bot, f"AI yanıtı başarısız: {str(exc)}")
+                await message.reply("Şu an yanıt veremedim; hata yönetim paneline kaydedildi.", mention_author=False)
 
     @commands.command(name="kimtasarladi", aliases=["tasarlayan", "designer"])
     async def designer(self, ctx: commands.Context):
@@ -135,6 +147,7 @@ class AssistantFeatures(commands.Cog):
             from sqlalchemy import select
             from app.database.event_models import EventParticipation
             from app.database.models import UserProfile
+            from app.database.advanced_models import AchievementDefinition
             profile = db.session.execute(select(UserProfile).where(UserProfile.discord_id == str(member.id))).scalar_one_or_none()
             participations = db.session.execute(select(EventParticipation).where(EventParticipation.discord_id == str(member.id), EventParticipation.status == "attended")).scalars().all()
             event_ids = [row.event_id for row in participations]
@@ -149,12 +162,32 @@ class AssistantFeatures(commands.Cog):
             most_played = max(games, key=games.get) if games else "Henüz yok"
             balance = profile.balance if profile else 0
             min_points = int(get_setting("giveaway_min_points", "100"))
+            achievement_defs = db.session.query(AchievementDefinition).filter_by(enabled=True).all()
+            attended_events = [db.session.get(Event, event_id) for event_id in event_ids]
+            attended_events = [event for event in attended_events if event is not None]
+            starts = sorted(event.starts_at for event in attended_events)
+            max_gap_days = max(((starts[i] - starts[i - 1]).days for i in range(1, len(starts))), default=0)
+            earned = []
+            for achievement in achievement_defs:
+                if achievement.condition_type == "events_attended":
+                    current = len(participations)
+                elif achievement.condition_type == "unique_games":
+                    current = len(games)
+                elif achievement.condition_type == "points":
+                    current = balance
+                elif achievement.condition_type == "comeback_days":
+                    current = max_gap_days
+                else:
+                    continue
+                if current >= achievement.threshold:
+                    earned.append(achievement.title)
         eligible = balance >= min_points
         embed = discord.Embed(title=f"📋 {member.display_name} · Kaplumbik profili", color=discord.Color.blurple())
         embed.add_field(name="Puan", value=str(balance), inline=True)
         embed.add_field(name="Katıldığı etkinlik", value=str(len(participations)), inline=True)
         embed.add_field(name="En çok oynadığı oyun", value=most_played, inline=True)
         embed.add_field(name="Son etkinlik", value=last_event.title if last_event else "Henüz yok", inline=False)
+        embed.add_field(name="Rozetler", value=", ".join(earned) if earned else "Henüz rozet yok", inline=False)
         embed.add_field(name="Çekiliş uygunluğu", value="Uygun" if eligible else f"Uygun değil (en az {min_points} puan)", inline=False)
         await ctx.send(embed=embed)
 

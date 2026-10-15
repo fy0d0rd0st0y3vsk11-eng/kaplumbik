@@ -36,8 +36,9 @@ def create_app(test_config=None):
         db.create_all()
 
     from app.dashboard import dashboard_bp
-    from app.dashboard import routes  # noqa: F401
+    from app.dashboard import routes as dashboard_routes
 
+    dashboard_routes.oauth.init_app(app)
     app.register_blueprint(dashboard_bp)
 
     @app.get("/health")

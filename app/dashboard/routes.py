@@ -6,11 +6,12 @@ from zoneinfo import ZoneInfo
 
 import discord
 from authlib.integrations.flask_client import OAuth
+from werkzeug.exceptions import HTTPException
+
 from flask import (
     abort,
     flash,
     redirect,
-    HTTPException,
     render_template_string,
     request,
     session,

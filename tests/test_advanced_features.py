@@ -8,7 +8,7 @@ from app.database.advanced_models import AchievementDefinition, BotHealthRecord,
 from app.database.models import AuditLog
 from app.database.event_models import Event
 from app.events.feature_service import get_setting, get_rsvp_summary, record_health, seed_achievements, set_setting
-from app.events.service import create_event, set_participation
+from app.events.service import EventStateError, create_event, set_participation
 
 
 @pytest.fixture
@@ -96,3 +96,16 @@ def test_first_time_decline_is_not_a_late_cancellation(app):
         )
         set_participation(event.id, "44444444444444444", "not_going")
         assert AuditLog.query.filter_by(action="event.rsvp_late_cancel").count() == 0
+
+
+
+def test_rsvp_changes_close_after_event_start(app):
+    with app.app_context():
+        event = create_event(
+            title="Started event",
+            game="Among Us",
+            starts_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            created_by="12345678901234567",
+        )
+        with pytest.raises(EventStateError, match="katılım yanıtları kapandı"):
+            set_participation(event.id, "55555555555555555", "going")

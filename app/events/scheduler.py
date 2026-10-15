@@ -12,7 +12,7 @@ from app.database import db
 from app.database.advanced_models import AnnouncementLog
 from app.database.event_models import Event
 from app.events.announcements import format_event
-from app.events.feature_service import get_setting
+from app.events.feature_service import get_setting, set_setting
 from app.events.rsvp import EventRSVPView
 
 logger = logging.getLogger("kaplumbik.scheduler")
@@ -53,6 +53,18 @@ class EventScheduler(commands.Cog):
     def cog_unload(self):
         self.scheduler_loop.cancel()
 
+    async def _notify_admin(self, details: str):
+        owner_id = await asyncio.to_thread(_read_setting, "designer_discord_id")
+        if not owner_id or not owner_id.isdigit():
+            owner_id = await asyncio.to_thread(_read_setting, "owner_discord_id")
+        if not owner_id or not owner_id.isdigit():
+            return
+        try:
+            user = self.bot.get_user(int(owner_id)) or await self.bot.fetch_user(int(owner_id))
+            await user.send(f"⚠️ **Kaplumbik duyuru hatası**\\n{details[:1200]}")
+        except Exception:
+            logger.exception("Could not send private admin alert")
+
     async def _channel(self):
         channel_id = await asyncio.to_thread(_read_setting, "game_announcement_channel_id")
         if not channel_id:
@@ -74,6 +86,7 @@ class EventScheduler(commands.Cog):
         channel = await self._channel()
         if channel is None:
             return
+        await self._process_resend(channel)
         now = datetime.now(timezone.utc)
         try:
             events = await asyncio.to_thread(_due_events, now)
@@ -122,10 +135,50 @@ class EventScheduler(commands.Cog):
                     app = create_app()
                     with app.app_context():
                         _log_delivery(event.id, channel.id, kind, message, False, str(exc))
-        except Exception:
+                    await self._notify_admin(f"Etkinlik #{event.id} duyurusu gönderilemedi: {exc}")
+        except Exception as exc:
             logger.exception("Scheduler loop failed")
+            await self._notify_admin(f"Zamanlayıcı döngüsü hata verdi: {exc}")
 
         await self._daily_announcement(channel)
+
+    async def _process_resend(self, channel):
+        event_id = await asyncio.to_thread(_read_setting, "resend_event_id")
+        if not event_id or not event_id.isdigit():
+            return
+        app = create_app()
+        with app.app_context():
+            event = db.session.get(Event, int(event_id))
+        if event is None or event.status != "scheduled":
+            app = create_app()
+            with app.app_context():
+                set_setting("resend_event_id", "")
+            await self._notify_admin(f"Yeniden gönderim isteğindeki etkinlik bulunamadı veya planlanmış değil: #{event_id}")
+            return
+        game_name = event.game.casefold()
+        if not event.game_link:
+            if "minecraft" in game_name or "realms" in game_name:
+                event.game_link = await asyncio.to_thread(_read_setting, "minecraft_realms_link")
+            elif "gartic" in game_name:
+                event.game_link = await asyncio.to_thread(_read_setting, "gartic_phone_link")
+        if not event.room_code and "among us" in game_name:
+            event.room_code = await asyncio.to_thread(_read_setting, "among_us_room_code")
+        ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"
+        message = ("@everyone\\n" if ping else "") + format_event(event) + "\\n\\nKatılımını seçmek için aşağıdaki butonları kullan."
+        kind = f"manual_resend:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+        try:
+            await channel.send(message, view=EventRSVPView(event.id), allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
+            app = create_app()
+            with app.app_context():
+                _log_delivery(event.id, channel.id, kind, message, True)
+                set_setting("resend_event_id", "")
+        except Exception as exc:
+            logger.exception("Manual announcement resend failed")
+            app = create_app()
+            with app.app_context():
+                _log_delivery(event.id, channel.id, kind, message, False, str(exc))
+                set_setting("resend_event_id", "")
+            await self._notify_admin(f"Etkinlik #{event.id} yeniden gönderilemedi: {exc}")
 
     async def _daily_announcement(self, channel):
         local_now = datetime.now(TR)
@@ -151,6 +204,7 @@ class EventScheduler(commands.Cog):
             app = create_app()
             with app.app_context():
                 _log_delivery(None, channel.id, kind, text, False, str(exc))
+            await self._notify_admin(f"Genel duyuru gönderilemedi: {exc}")
 
 
 async def setup(bot: commands.Bot):

@@ -8,6 +8,7 @@ from discord.ext import commands, tasks
 from sqlalchemy import select
 
 from app import create_app
+from app.core.config import settings
 from app.database import db
 from app.database.advanced_models import AnnouncementLog
 from app.database.event_models import Event
@@ -56,12 +57,12 @@ class EventScheduler(commands.Cog):
     async def _notify_admin(self, details: str):
         owner_id = await asyncio.to_thread(_read_setting, "designer_discord_id")
         if not owner_id or not owner_id.isdigit():
-            owner_id = await asyncio.to_thread(_read_setting, "owner_discord_id")
+            owner_id = settings.owner_discord_id
         if not owner_id or not owner_id.isdigit():
             return
         try:
             user = self.bot.get_user(int(owner_id)) or await self.bot.fetch_user(int(owner_id))
-            await user.send(f"⚠️ **Kaplumbik duyuru hatası**\\n{details[:1200]}")
+            await user.send(f"⚠️ **Kaplumbik duyuru hatası**\n{details[:1200]}")
         except Exception:
             logger.exception("Could not send private admin alert")
 
@@ -164,7 +165,7 @@ class EventScheduler(commands.Cog):
         if not event.room_code and "among us" in game_name:
             event.room_code = await asyncio.to_thread(_read_setting, "among_us_room_code")
         ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"
-        message = ("@everyone\\n" if ping else "") + format_event(event) + "\\n\\nKatılımını seçmek için aşağıdaki butonları kullan."
+        message = ("@everyone\n" if ping else "") + format_event(event) + "\n\nKatılımını seçmek için aşağıdaki butonları kullan."
         kind = f"manual_resend:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
         try:
             await channel.send(message, view=EventRSVPView(event.id), allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))

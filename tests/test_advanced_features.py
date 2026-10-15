@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from app import create_app
 from app.database import db
 from app.database.advanced_models import AchievementDefinition, BotHealthRecord, BotSetting
+from app.database.models import AuditLog
 from app.database.event_models import Event
 from app.events.feature_service import get_setting, get_rsvp_summary, record_health, seed_achievements, set_setting
 from app.events.service import create_event, set_participation
@@ -67,3 +68,18 @@ def test_health_records_are_stored(app):
         assert row.component == "ai"
         assert row.status == "error"
         assert row.details == "test error"
+
+
+
+def test_last_minute_cancellation_is_audited(app):
+    with app.app_context():
+        event = create_event(
+            title="Soon event",
+            game="Among Us",
+            starts_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            created_by="12345678901234567",
+        )
+        set_participation(event.id, "33333333333333333", "going")
+        set_participation(event.id, "33333333333333333", "not_going")
+        log = AuditLog.query.filter_by(action="event.rsvp_late_cancel").one()
+        assert log.target_id == f"{event.id}:33333333333333333"

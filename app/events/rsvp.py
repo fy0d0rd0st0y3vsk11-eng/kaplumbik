@@ -21,6 +21,10 @@ class EventRSVPView(discord.ui.View):
     def __init__(self, event_id: int):
         super().__init__(timeout=None)
         self.event_id = event_id
+        for item in self.children:
+            if isinstance(item, discord.ui.Button) and item.custom_id:
+                suffix = item.custom_id.rsplit(":", 1)[-1]
+                item.custom_id = f"kaplumbik:rsvp:{event_id}:{suffix}"
 
     async def respond(
         self,
@@ -97,6 +101,18 @@ class EventRSVPCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    async def cog_load(self):
+        # Re-register persistent event buttons after bot restarts.
+        from app import create_app
+        from app.database import db
+        from app.database.event_models import Event
+        app = create_app()
+        with app.app_context():
+            events = db.session.query(Event).filter_by(status="scheduled").all()
+            event_ids = [event.id for event in events]
+        for event_id in event_ids:
+            self.bot.add_view(EventRSVPView(event_id))
 
     @commands.command(name="etkinlik")
     async def event_details(

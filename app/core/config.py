@@ -23,7 +23,7 @@ class Settings:
     )
     discord_redirect_uri: str = os.getenv(
         "DISCORD_REDIRECT_URI",
-        "http://127.0.0.1:5000/auth/callback",
+        "http://127.0.0.1:5000/dashboard/callback",
     )
 
     database_url: str = os.getenv(

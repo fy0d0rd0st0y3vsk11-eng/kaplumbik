@@ -35,7 +35,7 @@ def _due_events(now):
 
 def _already_sent(event_id, kind):
     row = db.session.execute(select(AnnouncementLog.id).where(
-        AnnouncementLog.event_id == event_id, AnnouncementLog.kind == kind
+        AnnouncementLog.event_id == event_id, AnnouncementLog.kind == kind, AnnouncementLog.success.is_(True)
     ).limit(1)).first()
     return row is not None
 
@@ -101,6 +101,14 @@ class EventScheduler(commands.Cog):
                 with app.app_context():
                     if _already_sent(event.id, kind):
                         continue
+                game_name = event.game.casefold()
+                if not event.game_link:
+                    if "minecraft" in game_name or "realms" in game_name:
+                        event.game_link = await asyncio.to_thread(_read_setting, "minecraft_realms_link")
+                    elif "gartic" in game_name:
+                        event.game_link = await asyncio.to_thread(_read_setting, "gartic_phone_link")
+                if not event.room_code and "among us" in game_name:
+                    event.room_code = await asyncio.to_thread(_read_setting, "among_us_room_code")
                 ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"
                 prefix = "@everyone\n" if ping else ""
                 message = prefix + format_event(event) + "\n\nKatılımını seçmek için aşağıdaki butonları kullan."
@@ -128,7 +136,7 @@ class EventScheduler(commands.Cog):
         kind = f"daily:{local_now.strftime('%Y-%m-%d')}:{current_slot}"
         app = create_app()
         with app.app_context():
-            exists = db.session.execute(select(AnnouncementLog.id).where(AnnouncementLog.kind == kind).limit(1)).first()
+            exists = db.session.execute(select(AnnouncementLog.id).where(AnnouncementLog.kind == kind, AnnouncementLog.success.is_(True)).limit(1)).first()
             if exists:
                 return
         ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"

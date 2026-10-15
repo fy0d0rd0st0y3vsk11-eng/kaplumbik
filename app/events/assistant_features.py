@@ -123,11 +123,11 @@ class AssistantFeatures(commands.Cog):
             return
         if any(term in lowered for term in ("gartic link", "gartic phone link", "gartic bağlantı")):
             link = await asyncio.to_thread(_setting, "gartic_phone_link")
-            await message.reply(f"🎨 Gartic Phone bağlantısı: {link}" if link else "Gartic Phone bağlantısı henüz ayarlanmamış.", mention_author=False)
+            await message.reply(f"🎨 Gartic Phone bağlantısı: {link}" if link else "Gartic Phone bağlantısı henüz ayarlanmamış.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return
         if any(term in lowered for term in ("among us kod", "among us code", "oda kodu", "code?")):
             code = await asyncio.to_thread(_setting, "among_us_room_code")
-            await message.reply(f"🚀 Among Us oda kodu: **{code}**" if code else "Among Us oda kodu henüz ayarlanmamış.", mention_author=False)
+            await message.reply(f"🚀 Among Us oda kodu: **{code}**" if code else "Among Us oda kodu henüz ayarlanmamış.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return
 
         if lowered.strip() in {"link", "link?", "link pls", "linki at", "link at", "bağlantı", "bağlantı?", "linki"}:
@@ -171,7 +171,7 @@ class AssistantFeatures(commands.Cog):
     @commands.command(name="tanit", aliases=["intro"])
     async def introduce_member(self, ctx: commands.Context, member: discord.Member):
         intro = await asyncio.to_thread(_setting, "new_member_intro")
-        await ctx.send(f"👋 {member.mention} için Mahzen tanıtımı:\n{intro}", allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False))
+        await ctx.send(f"👋 {member.mention} için Mahzen tanıtımı:\n{intro}", allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False))
 
     @commands.command(name="profil")
     async def profile(self, ctx: commands.Context, member: discord.Member | None = None):

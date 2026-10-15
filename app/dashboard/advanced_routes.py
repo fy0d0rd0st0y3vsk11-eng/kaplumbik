@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from flask import flash, redirect, render_template_string, request, session, url_for
 
 from app.database import db
-from app.database.advanced_models import AchievementDefinition, AnnouncementLog
+from app.database.advanced_models import AchievementDefinition, AnnouncementLog, BotSetting
 from app.database.event_models import Event
 from app.database.models import AuditLog, UserProfile
 from app.events.feature_service import get_setting, set_setting, health_snapshot, seed_achievements
@@ -80,13 +80,19 @@ def advanced_save():
         times = [part.strip() for part in request.form.get("announcement_times", "12:00,17:00,20:00").split(",") if part.strip()]
         for item in times:
             datetime.strptime(item, "%H:%M")
-        values["announcement_times"] = ",".join(times[:12])
+        values["announcement_times"] = ",".join(dict.fromkeys(times[:12]))
         reminders = [int(part.strip()) for part in values["game_reminder_minutes"].split(",") if part.strip()]
         if any(n < 1 or n > 1440 for n in reminders):
             raise ValueError("Hatırlatma dakikaları 1–1440 aralığında olmalı.")
         values["game_reminder_minutes"] = ",".join(map(str, sorted(set(reminders), reverse=True)))
         for key, value in values.items():
-            set_setting(key, value, actor)
+            row = db.session.get(BotSetting, key)
+            if row is None:
+                row = BotSetting(key=key, value=value)
+                db.session.add(row)
+            else:
+                row.value = value
+            row.updated_by = actor
         db.session.add(AuditLog(actor_discord_id=actor, action="settings.update", target_type="bot_settings", target_id="all", details={"keys": list(values)}, success=True))
         db.session.commit()
         flash("Gelişmiş ayarlar kaydedildi.")

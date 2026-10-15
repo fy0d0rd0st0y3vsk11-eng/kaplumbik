@@ -49,6 +49,7 @@ def _log_delivery(event_id, channel_id, kind, message, success, error=""):
 class EventScheduler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._channel_alerted = False
         self.scheduler_loop.start()
 
     def cog_unload(self):
@@ -71,14 +72,21 @@ class EventScheduler(commands.Cog):
         if not channel_id:
             channel_id = await asyncio.to_thread(_read_setting, "announcement_channel_id")
         if not channel_id or not channel_id.isdigit():
+            if not self._channel_alerted:
+                self._channel_alerted = True
+                await self._notify_admin("Duyuru kanalı ayarlanmamış. Gelişmiş panelden duyuru kanalı ID'sini kaydet.")
             return None
         channel = self.bot.get_channel(int(channel_id))
         if channel is None:
             try:
                 channel = await self.bot.fetch_channel(int(channel_id))
-            except Exception:
+            except Exception as exc:
                 logger.exception("Announcement channel unavailable")
+                if not self._channel_alerted:
+                    self._channel_alerted = True
+                    await self._notify_admin(f"Duyuru kanalına erişilemiyor: {exc}")
                 return None
+        self._channel_alerted = False
         return channel
 
     @tasks.loop(minutes=1)

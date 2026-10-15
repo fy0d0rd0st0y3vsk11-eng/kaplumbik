@@ -27,7 +27,7 @@ SETTINGS_PAGE = """
 {% for item in achievements %}<form method="post" action="{{ url_for('dashboard.achievement_save', achievement_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><strong>{{ item.key }}</strong><div class="grid"><div><label>Başlık</label><input name="title" maxlength="100" value="{{ item.title }}" required></div><div><label>Koşul türü</label><select name="condition_type">{% for kind in ['events_attended','unique_games','comeback_days','points'] %}<option value="{{ kind }}" {% if item.condition_type == kind %}selected{% endif %}>{{ kind }}</option>{% endfor %}</select></div><div><label>Eşik</label><input name="threshold" type="number" min="1" max="100000" value="{{ item.threshold }}" required></div></div><label>Açıklama</label><input name="description" maxlength="300" value="{{ item.description }}"><label><input style="width:auto" type="checkbox" name="enabled" {% if item.enabled %}checked{% endif %}> Etkin</label><button type="submit">Başarımı kaydet</button></form>{% endfor %}</section>
 <section><h2>Üye arama ve puan bakiyesi</h2><form method="get" action="{{ url_for('dashboard.advanced_index') }}"><label>Discord ID veya kullanıcı adı</label><input name="member_q" value="{{ member_q }}" placeholder="ID ya da kullanıcı adı"><button type="submit">Ara</button></form><table><tr><th>Üye</th><th>Discord ID</th><th>Puan</th><th>Etkinlik puanı</th><th>Seviye</th></tr>{% for member in members %}<tr><td>{{ member.username or 'İsimsiz üye' }}</td><td>{{ member.discord_id }}</td><td>{{ member.balance }}</td><td>{{ member.total_event_points }}</td><td>{{ member.level }}</td></tr>{% else %}<tr><td colspan="5">Aramayla eşleşen üye yok.</td></tr>{% endfor %}</table></section>
 <section><h2>İptal edilmiş etkinlikler</h2><p class="muted">Gelecekteki etkinlikler buradan geri alınabilir; geçmiş etkinlikler yeniden planlanmaz.</p>{% for event in cancelled_events %}<form method="post" action="{{ url_for('dashboard.restore_event', event_id=event.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><strong>#{{ event.id }} · {{ event.title }}</strong> — {{ event.starts_at.strftime('%d.%m.%Y %H:%M') }}<button type="submit">Etkinliği geri yükle</button></form>{% else %}<p>Geri yüklenecek iptal edilmiş etkinlik yok.</p>{% endfor %}</section>
-<section><h2>Son duyuru kayıtları</h2><table><tr><th>Etkinlik</th><th>Tür</th><th>Durum</th><th>Hata</th><th>Zaman</th></tr>{% for log in announcement_logs %}<tr><td>{{ log.event_id or 'Genel' }}</td><td>{{ log.kind }}</td><td>{{ 'Başarılı' if log.success else 'Hata' }}</td><td>{{ log.error or '' }}</td><td>{{ log.sent_at.strftime('%d.%m %H:%M:%S') }}</td></tr>{% else %}<tr><td colspan="5">Henüz duyuru kaydı yok.</td></tr>{% endfor %}</table></section>
+<section><h2>Son duyuru kayıtları</h2><table><tr><th>Etkinlik</th><th>Tür</th><th>Durum</th><th>Hata</th><th>Zaman</th></tr>{% for log in announcement_logs %}<tr><td>{{ log.event_id or 'Genel' }}</td><td>{{ log.kind }}</td><td>{{ 'Başarılı' if log.success else 'Hata' }}</td><td>{{ log.error or '' }}</td><td>{{ log.sent_at.strftime('%d.%m %H:%M:%S') }}{% if log.event_id %}<form method="post" action="{{ url_for('dashboard.resend_announcement', log_id=log.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Yeniden gönder</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="5">Henüz duyuru kaydı yok.</td></tr>{% endfor %}</table></section>
 <section><h2>Son sağlık kayıtları</h2><table><tr><th>Bileşen</th><th>Durum</th><th>Detay</th><th>Zaman</th></tr>{% for row in health %}<tr><td>{{ row.component }}</td><td>{{ row.status }}</td><td>{{ row.details or '' }}</td><td>{{ row.checked_at.strftime('%d.%m %H:%M:%S') }}</td></tr>{% else %}<tr><td colspan="4">Henüz sağlık kaydı yok.</td></tr>{% endfor %}</table></section>
 </body></html>
 """
@@ -144,4 +144,28 @@ def restore_event(event_id):
         db.session.rollback()
         logger.exception("Could not restore event")
         flash(f"Etkinlik geri yüklenemedi: {str(exc)[:180]}")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/announcements/<int:log_id>/resend")
+@owner_required
+def resend_announcement(log_id):
+    _require_csrf()
+    log = db.session.get(AnnouncementLog, log_id)
+    try:
+        if log is None or log.event_id is None:
+            raise ValueError("Yeniden gönderilecek etkinlik duyurusu bulunamadı.")
+        event = db.session.get(Event, log.event_id)
+        if event is None:
+            raise ValueError("Etkinlik artık bulunamıyor.")
+        if event.status != "scheduled":
+            raise ValueError("Yalnızca planlanmış etkinliklerin duyuruları yeniden gönderilebilir.")
+        set_setting("resend_event_id", str(event.id), str(session["discord_id"]))
+        db.session.add(AuditLog(actor_discord_id=str(session["discord_id"]), action="announcement.resend_requested", target_type="event", target_id=str(event.id), details={"log_id": log_id}, success=True))
+        db.session.commit()
+        flash(f"Etkinlik #{event.id} için yeniden gönderim isteği kuyruğa alındı.")
+    except Exception as exc:
+        db.session.rollback()
+        logger.exception("Could not queue announcement resend")
+        flash(f"Yeniden gönderim kuyruğa alınamadı: {str(exc)[:180]}")
     return redirect(url_for("dashboard.advanced_index"))

@@ -63,7 +63,7 @@ class EventAnnouncementCog(commands.Cog):
 
             for event in events:
                 await ctx.send(
-                    f"**Etkinlik #{event.id}**\\n" + format_event(event) + f"\nKatılım butonları: `!etkinlik {event.id}`",
+                    f"**Etkinlik #{event.id}**\n" + format_event(event) + f"\nKatılım butonları: `!etkinlik {event.id}`",
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
 

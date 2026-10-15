@@ -50,7 +50,9 @@ def _next_game_link():
 
 
 async def _notify_owner(bot: commands.Bot, details: str):
-    owner_id = await asyncio.to_thread(_setting, "designer_discord_id", settings.owner_discord_id)
+    owner_id = await asyncio.to_thread(_setting, "designer_discord_id")
+    if not owner_id or not owner_id.isdigit():
+        owner_id = settings.owner_discord_id
     if not owner_id or not owner_id.isdigit():
         return
     try:
@@ -139,7 +141,7 @@ class AssistantFeatures(commands.Cog):
             return
 
         if self.bot.user and self.bot.user in message.mentions:
-            if any(term in lowered for term in ("realms'e nasıl", "realms'e nasil", "realms nasıl katıl", "realms nasil katil", "minecraft realms")):
+            if any(term in lowered for term in ("realms'e nasıl", "realms'e nasil", "realms nasıl katıl", "realms nasil katil", "minecraft realms", "how do i join realms", "how do i join a realm", "how to join realms", "join my realm")):
                 await message.reply(
                     "Minecraft Realms'e katılmak için: Minecraft'ı aç, doğru Microsoft hesabında olduğundan emin ol, **Oyna > Arkadaşlar** bölümüne gir ve davet edilen Realm'i seç. Sahip sana davet bağlantısı/kodu göndermeli; sürümün (Bedrock/Java) ve platformun Realm ile uyumlu olmalı. Bağlantıyı panelden ekleyebiliriz.",
                     mention_author=False,

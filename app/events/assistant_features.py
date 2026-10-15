@@ -118,7 +118,7 @@ class AssistantFeatures(commands.Cog):
     async def designer(self, ctx: commands.Context):
         owner_id = await asyncio.to_thread(_setting, "designer_discord_id", settings.owner_discord_id)
         if owner_id and owner_id.isdigit():
-            await ctx.send(f"🐢 Kaplumbik'i tasarlayan kişi: <@{owner_id}>", allowed_mentions=discord.AllowedMentions.none())
+            await ctx.send(f"🐢 Kaplumbik'i tasarlayan kişi: <@{owner_id}>", allowed_mentions=discord.AllowedMentions(users=[discord.Object(id=int(owner_id))], roles=False, everyone=False))
         else:
             await ctx.send("Tasarımcı Discord ID'si henüz yönetim panelinde ayarlanmamış.")
 

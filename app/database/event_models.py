@@ -35,6 +35,10 @@ class Event(db.Model):
         default=event_utc_now,
     )
 
+    participations = db.relationship(
+        "EventParticipation", backref="event", lazy="select"
+    )
+
     __table_args__ = (
         CheckConstraint(
             "status IN ('scheduled', 'cancelled', 'completed')",

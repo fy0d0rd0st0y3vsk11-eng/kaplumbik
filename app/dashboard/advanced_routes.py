@@ -5,7 +5,8 @@ from zoneinfo import ZoneInfo
 from flask import flash, redirect, render_template_string, request, session, url_for
 
 from app.database import db
-from app.database.advanced_models import AchievementDefinition
+from app.database.advanced_models import AchievementDefinition, AnnouncementLog
+from app.database.event_models import Event
 from app.database.models import AuditLog
 from app.events.feature_service import get_setting, set_setting, health_snapshot, seed_achievements
 from app.dashboard import dashboard_bp
@@ -24,6 +25,8 @@ SETTINGS_PAGE = """
 <section><h2>Duyuru ve hatırlatmalar</h2><label>Duyuru kanalı ID'si</label><input name="announcement_channel_id" pattern="[0-9]{15,25}" value="{{ values.announcement_channel_id }}"><label>Etkinlik duyuru kanalı ID'si (boşsa üstteki kullanılır)</label><input name="game_announcement_channel_id" pattern="[0-9]{0,25}" value="{{ values.game_announcement_channel_id }}"><label>Günlük genel duyuru saatleri (Türkiye saati, virgülle; ör. 12:00,17:00,20:00)</label><input name="announcement_times" value="{{ values.announcement_times }}"><label>Başlangıçtan önce hatırlatma dakikaları (virgülle; ör. 15,5)</label><input name="game_reminder_minutes" value="{{ values.game_reminder_minutes }}"><label>Her duyuruda @everyone kullanılsın mı?</label><select name="announcement_everyone_ping"><option value="true" {% if values.announcement_everyone_ping == 'true' %}selected{% endif %}>Evet</option><option value="false" {% if values.announcement_everyone_ping != 'true' %}selected{% endif %}>Hayır</option></select><button type="submit">Ayarları kaydet</button></section></form>
 <section><h2>Başarımlar</h2><p class="muted">Koşullar düzenlenebilir. Bu sürümde tanım/koşul kaydı vardır; profil kartlarına otomatik rozet dağıtımı ayrı kontrol gerektirir.</p>
 {% for item in achievements %}<form method="post" action="{{ url_for('dashboard.achievement_save', achievement_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><strong>{{ item.key }}</strong><div class="grid"><div><label>Başlık</label><input name="title" maxlength="100" value="{{ item.title }}" required></div><div><label>Koşul türü</label><select name="condition_type">{% for kind in ['events_attended','unique_games','comeback_days','points'] %}<option value="{{ kind }}" {% if item.condition_type == kind %}selected{% endif %}>{{ kind }}</option>{% endfor %}</select></div><div><label>Eşik</label><input name="threshold" type="number" min="1" max="100000" value="{{ item.threshold }}" required></div></div><label>Açıklama</label><input name="description" maxlength="300" value="{{ item.description }}"><label><input style="width:auto" type="checkbox" name="enabled" {% if item.enabled %}checked{% endif %}> Etkin</label><button type="submit">Başarımı kaydet</button></form>{% endfor %}</section>
+<section><h2>İptal edilmiş etkinlikler</h2><p class="muted">Gelecekteki etkinlikler buradan geri alınabilir; geçmiş etkinlikler yeniden planlanmaz.</p>{% for event in cancelled_events %}<form method="post" action="{{ url_for('dashboard.restore_event', event_id=event.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><strong>#{{ event.id }} · {{ event.title }}</strong> — {{ event.starts_at.strftime('%d.%m.%Y %H:%M') }}<button type="submit">Etkinliği geri yükle</button></form>{% else %}<p>Geri yüklenecek iptal edilmiş etkinlik yok.</p>{% endfor %}</section>
+<section><h2>Son duyuru kayıtları</h2><table><tr><th>Etkinlik</th><th>Tür</th><th>Durum</th><th>Hata</th><th>Zaman</th></tr>{% for log in announcement_logs %}<tr><td>{{ log.event_id or 'Genel' }}</td><td>{{ log.kind }}</td><td>{{ 'Başarılı' if log.success else 'Hata' }}</td><td>{{ log.error or '' }}</td><td>{{ log.sent_at.strftime('%d.%m %H:%M:%S') }}</td></tr>{% else %}<tr><td colspan="5">Henüz duyuru kaydı yok.</td></tr>{% endfor %}</table></section>
 <section><h2>Son sağlık kayıtları</h2><table><tr><th>Bileşen</th><th>Durum</th><th>Detay</th><th>Zaman</th></tr>{% for row in health %}<tr><td>{{ row.component }}</td><td>{{ row.status }}</td><td>{{ row.details or '' }}</td><td>{{ row.checked_at.strftime('%d.%m %H:%M:%S') }}</td></tr>{% else %}<tr><td colspan="4">Henüz sağlık kaydı yok.</td></tr>{% endfor %}</table></section>
 </body></html>
 """
@@ -45,7 +48,9 @@ def advanced_index():
     values["game_reminder_minutes"] = get_setting("game_reminder_minutes", "15,5")
     achievements = db.session.query(AchievementDefinition).order_by(AchievementDefinition.id).all()
     health = health_snapshot(30)
-    return render_template_string(SETTINGS_PAGE, values=values, achievements=achievements, health=health, csrf_token=session.get("csrf_token", ""))
+    announcement_logs = db.session.query(AnnouncementLog).order_by(AnnouncementLog.sent_at.desc()).limit(30).all()
+    cancelled_events = db.session.query(Event).filter_by(status="cancelled").order_by(Event.starts_at.desc()).limit(30).all()
+    return render_template_string(SETTINGS_PAGE, values=values, achievements=achievements, health=health, announcement_logs=announcement_logs, cancelled_events=cancelled_events, csrf_token=session.get("csrf_token", ""))
 
 
 @dashboard_bp.post("/advanced/save")
@@ -108,4 +113,28 @@ def achievement_save(achievement_id):
         db.session.rollback()
         logger.exception("Could not save achievement")
         flash(f"Başarım kaydedilemedi: {str(exc)[:180]}")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/events/<int:event_id>/restore")
+@owner_required
+def restore_event(event_id):
+    _require_csrf()
+    event = db.session.get(Event, event_id)
+    try:
+        if event is None or event.status != "cancelled":
+            raise ValueError("Geri yüklenecek iptal edilmiş etkinlik bulunamadı.")
+        event_start = event.starts_at
+        if event_start.tzinfo is None:
+            event_start = event_start.replace(tzinfo=timezone.utc)
+        if event_start <= datetime.now(timezone.utc):
+            raise ValueError("Geçmiş bir etkinlik yeniden planlanamaz.")
+        event.status = "scheduled"
+        db.session.add(AuditLog(actor_discord_id=str(session["discord_id"]), action="event.restore", target_type="event", target_id=str(event.id), details={"title": event.title}, success=True))
+        db.session.commit()
+        flash(f"Etkinlik #{event.id} geri yüklendi.")
+    except Exception as exc:
+        db.session.rollback()
+        logger.exception("Could not restore event")
+        flash(f"Etkinlik geri yüklenemedi: {str(exc)[:180]}")
     return redirect(url_for("dashboard.advanced_index"))

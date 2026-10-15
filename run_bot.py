@@ -8,7 +8,11 @@ from app.core.config import settings
 
 
 logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    level=getattr(
+        logging,
+        settings.log_level.upper(),
+        logging.INFO,
+    ),
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 
@@ -28,6 +32,12 @@ class KaplumbikBot(commands.Bot):
 
     async def setup_hook(self):
         logger.info("Kaplumbik komut altyapısı hazırlanıyor.")
+
+        await self.load_extension(
+            "app.events.announcements"
+        )
+
+        logger.info("Etkinlik duyuru modülü yüklendi.")
 
     async def on_ready(self):
         logger.info(
@@ -50,3 +60,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

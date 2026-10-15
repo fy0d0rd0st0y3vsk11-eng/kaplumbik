@@ -369,7 +369,8 @@ def attendance_route(event_id):
             EventParticipation.event_id == event_id,
             EventParticipation.discord_id == discord_id,
         )).scalar_one_or_none()
-        if existing and existing.reward_approved and points:
+        reward_was_approved = bool(existing and existing.reward_approved)
+        if reward_was_approved and points:
             raise ValueError("Bu ödül daha önce onaylanmış; ikinci kez verilemez.")
         participation = record_attendance(
             event_id=event_id, discord_id=discord_id, status=status,
@@ -402,7 +403,7 @@ def attendance_route(event_id):
             participation.reward_transaction_id = tx.id
             tx.reference_type = "event"
             tx.reference_id = str(event_id)
-            profile.total_event_points += points if not existing or not existing.reward_approved else 0
+            if not reward_was_approved:\n                profile.total_event_points += points
         db.session.add(AuditLog(
             actor_discord_id=str(session["discord_id"]), action="event.attendance",
             target_type="event_participation", target_id=f"{event_id}:{discord_id}",

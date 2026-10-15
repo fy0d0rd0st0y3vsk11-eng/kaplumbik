@@ -60,6 +60,17 @@ def main():
     # Flask uygulamasını ve veritabanını hazırla.
     flask_app = create_app()
 
+    # Render Web Service için HTTP portunu dinle; bot aynı süreçte çalışır.
+    port = int(os.getenv("PORT", "10000"))
+    web_thread = threading.Thread(
+        target=serve,
+        kwargs={"app": flask_app, "host": "0.0.0.0", "port": port},
+        name="kaplumbik-dashboard",
+        daemon=True,
+    )
+    web_thread.start()
+    logger.info("Yönetim paneli HTTP sunucusu başlatıldı (port %s).", port)
+
     # Bot çalıştığı sürece Flask uygulama bağlamını açık tut.
     with flask_app.app_context():
         bot = KaplumbikBot()

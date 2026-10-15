@@ -126,6 +126,13 @@ def set_participation(
                 "Responses are closed for this event."
             )
 
+        starts_at = event.starts_at
+        if starts_at.tzinfo is None:
+            starts_at = starts_at.replace(tzinfo=timezone.utc)
+        seconds_to_start = (starts_at - datetime.now(timezone.utc)).total_seconds()
+        if seconds_to_start <= 0:
+            raise EventStateError("Etkinlik başladı; katılım yanıtları kapandı.")
+
         participation = db.session.execute(
             select(EventParticipation).where(
                 EventParticipation.event_id == event_id,
@@ -134,10 +141,6 @@ def set_participation(
         ).scalar_one_or_none()
 
         # A late cancellation means a previous "going" response changed to "not_going".
-        starts_at = event.starts_at
-        if starts_at.tzinfo is None:
-            starts_at = starts_at.replace(tzinfo=timezone.utc)
-        seconds_to_start = (starts_at - datetime.now(timezone.utc)).total_seconds()
         late_cancellation = (
             participation is not None
             and participation.status == "going"

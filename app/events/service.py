@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.database import db
 from app.database.event_models import Event, EventParticipation
+from app.database.models import AuditLog
 
 
 class EventServiceError(Exception):
@@ -125,6 +126,13 @@ def set_participation(
                 "Responses are closed for this event."
             )
 
+        # Keep late cancellations distinct from no-shows in the audit trail.
+        starts_at = event.starts_at
+        if starts_at.tzinfo is None:
+            starts_at = starts_at.replace(tzinfo=timezone.utc)
+        seconds_to_start = (starts_at - datetime.now(timezone.utc)).total_seconds()
+        late_cancellation = status == "not_going" and 0 < seconds_to_start <= 30 * 60
+
         participation = db.session.execute(
             select(EventParticipation).where(
                 EventParticipation.event_id == event_id,
@@ -151,6 +159,16 @@ def set_participation(
                 )
 
             participation.status = status
+
+        if late_cancellation:
+            db.session.add(AuditLog(
+                actor_discord_id=discord_id,
+                action="event.rsvp_late_cancel",
+                target_type="event_participation",
+                target_id=f"{event_id}:{discord_id}",
+                details={"seconds_before_start": int(seconds_to_start), "status": "not_going"},
+                success=True,
+            ))
 
         db.session.commit()
         return participation

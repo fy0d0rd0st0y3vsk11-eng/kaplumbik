@@ -1,5 +1,6 @@
 
 import secrets
+from pathlib import Path
 
 from flask import Flask
 
@@ -21,6 +22,10 @@ def create_app(test_config=None):
         settings.database_url
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    # SQLite URLs use Flask's instance directory for relative paths.
+    # Ensure it exists on fresh deployments before opening the database.
+    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 
     if test_config:
         app.config.update(test_config)

@@ -23,21 +23,21 @@ def format_event(event: Event) -> str:
     timestamp = int(starts_at.timestamp())
 
     lines = [
-        f"🎮 **{discord.utils.escape_markdown(event.title)}**",
-        f"🕹️ Oyun: {discord.utils.escape_markdown(event.game)}",
+        f"🎮 **{discord.utils.escape_mentions(discord.utils.escape_markdown(event.title))}**",
+        f"🕹️ Oyun: {discord.utils.escape_mentions(discord.utils.escape_markdown(event.game))}",
         f"🕒 Başlangıç: <t:{timestamp}:F>",
     ]
 
     if event.description:
         lines.append(
-            discord.utils.escape_markdown(event.description)
+            discord.utils.escape_mentions(discord.utils.escape_markdown(event.description))
         )
 
     if event.game_link:
-        lines.append(f"🔗 Oyun bağlantısı: {event.game_link}")
+        lines.append(f"🔗 Oyun bağlantısı: {discord.utils.escape_mentions(event.game_link)}")
 
     if event.room_code and "among us" in event.game.casefold():
-        lines.append(f"🚀 Among Us oda kodu: **{discord.utils.escape_markdown(event.room_code)}**")
+        lines.append(f"🚀 Among Us oda kodu: **{discord.utils.escape_mentions(discord.utils.escape_markdown(event.room_code))}**")
 
     return "\n".join(lines)
 

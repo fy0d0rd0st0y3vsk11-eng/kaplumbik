@@ -83,3 +83,16 @@ def test_last_minute_cancellation_is_audited(app):
         set_participation(event.id, "33333333333333333", "not_going")
         log = AuditLog.query.filter_by(action="event.rsvp_late_cancel").one()
         assert log.target_id == f"{event.id}:33333333333333333"
+
+
+
+def test_first_time_decline_is_not_a_late_cancellation(app):
+    with app.app_context():
+        event = create_event(
+            title="Soon event",
+            game="Among Us",
+            starts_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            created_by="12345678901234567",
+        )
+        set_participation(event.id, "44444444444444444", "not_going")
+        assert AuditLog.query.filter_by(action="event.rsvp_late_cancel").count() == 0

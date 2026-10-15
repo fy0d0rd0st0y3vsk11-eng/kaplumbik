@@ -115,6 +115,14 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 </details>{% endif %}
 </div>{% endfor %}{% else %}<div class="empty">Henüz etkinlik yok.</div>{% endif %}
 </section>
+<section class="panel"><h2>Üyeler ve bakiyeler</h2>
+<form method="get" action="{{ url_for('dashboard.index') }}">
+<label>Discord ID veya kullanıcı adına göre ara</label><input name="q" value="{{ member_query }}" maxlength="100" placeholder="Üye ara…">
+<button type="submit">Ara</button> {% if member_query %}<a href="{{ url_for('dashboard.index') }}">Temizle</a>{% endif %}
+</form>
+<div class="table-wrap"><table><thead><tr><th>Kullanıcı</th><th>Discord ID</th><th>Bakiye</th><th>Etkinlik puanı</th><th>Seviye</th><th>Son etkinlik</th></tr></thead><tbody>
+{% for member in members %}<tr><td>{{ member.username or 'İsimsiz üye' }}</td><td>{{ member.discord_id }}</td><td>{{ member.balance }}</td><td>{{ member.total_event_points }}</td><td>{{ member.level }}</td><td>{{ member.last_event_at.strftime('%d.%m.%Y') if member.last_event_at else '—' }}</td></tr>{% else %}<tr><td colspan="6">Üye bulunamadı.</td></tr>{% endfor %}
+</tbody></table></div></section>
 <div class="grid">
 <section class="panel"><h2>Son puan hareketleri</h2><div class="table-wrap"><table><thead><tr><th>Üye ID</th><th>Miktar</th><th>Açıklama</th><th>Tarih</th></tr></thead><tbody>
 {% for tx in transactions %}<tr><td>{{ tx.user.discord_id if tx.user else tx.user_id }}</td><td>{{ '+' if tx.amount > 0 else '' }}{{ tx.amount }}</td><td>{{ tx.description }}</td><td>{{ tx.created_at.strftime('%d.%m %H:%M') }}</td></tr>{% else %}<tr><td colspan="4">Kayıt yok.</td></tr>{% endfor %}
@@ -174,8 +182,16 @@ def index():
         session.clear()
         abort(403, description="Bu panel yalnızca sunucu sahibi için açık.")
 
-    from sqlalchemy import select, func
+    from sqlalchemy import select, func, or_
 
+    member_query = request.args.get("q", "").strip()[:100]
+    member_stmt = select(UserProfile).order_by(UserProfile.updated_at.desc())
+    if member_query:
+        member_stmt = member_stmt.where(or_(
+            UserProfile.discord_id.contains(member_query),
+            UserProfile.username.ilike(f"%{member_query}%"),
+        ))
+    members = list(db.session.execute(member_stmt.limit(100)).scalars())
     events = list(db.session.execute(
         select(Event).order_by(Event.starts_at.desc()).limit(50)
     ).scalars())
@@ -195,7 +211,8 @@ def index():
         PAGE, title="Panel", logged_in=True,
         username=session.get("username", "Yönetici"),
         csrf_token=_csrf_token(), stats=stats, events=events,
-        transactions=transactions, audit_logs=audit_logs
+        transactions=transactions, audit_logs=audit_logs,
+        members=members, member_query=member_query
     )
 
 

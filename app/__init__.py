@@ -19,8 +19,18 @@ def create_app(test_config=None):
 
     init_database(app)
 
-    # Import models so SQLAlchemy can register their tables.
+    # Register all database models before create_all().
     from app.database import models  # noqa: F401
+    from app.database import event_models  # noqa: F401
+
+    with app.app_context():
+        from app.database import db
+        db.create_all()
+
+    from app.dashboard import dashboard_bp
+    from app.dashboard import routes  # noqa: F401
+
+    app.register_blueprint(dashboard_bp)
 
     @app.get("/health")
     def health():
@@ -30,4 +40,4 @@ def create_app(test_config=None):
         }, 200
 
     return app
-  
+    

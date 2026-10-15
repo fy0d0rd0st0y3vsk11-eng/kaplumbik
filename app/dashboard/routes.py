@@ -404,7 +404,8 @@ def attendance_route(event_id):
             participation.reward_transaction_id = tx.id
             tx.reference_type = "event"
             tx.reference_id = str(event_id)
-            if not reward_was_approved:\n                profile.total_event_points += points
+            if not reward_was_approved:
+                profile.total_event_points += points
         db.session.add(AuditLog(
             actor_discord_id=str(session["discord_id"]), action="event.attendance",
             target_type="event_participation", target_id=f"{event_id}:{discord_id}",

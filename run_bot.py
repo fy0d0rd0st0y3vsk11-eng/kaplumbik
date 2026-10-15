@@ -1,9 +1,9 @@
-
 import logging
 
 import discord
 from discord.ext import commands
 
+from app import create_app
 from app.core.config import settings
 
 
@@ -33,16 +33,10 @@ class KaplumbikBot(commands.Bot):
     async def setup_hook(self):
         logger.info("Kaplumbik hazırlanıyor...")
 
-        await self.load_extension(
-            "app.events.announcements"
-        )
-
+        await self.load_extension("app.events.announcements")
         logger.info("Etkinlik duyuru sistemi yüklendi.")
 
-        await self.load_extension(
-            "app.events.rsvp"
-        )
-
+        await self.load_extension("app.events.rsvp")
         logger.info("Etkinlik katılım butonları yüklendi.")
 
     async def on_ready(self):
@@ -60,13 +54,14 @@ def main():
             "Tokenı kodun içine yazma; ortam değişkeni kullan."
         )
 
-    bot = KaplumbikBot()
-    bot.run(
-        settings.discord_token,
-        log_handler=None,
-    )
+    # Flask uygulamasını ve veritabanını hazırla.
+    flask_app = create_app()
+
+    # Bot çalıştığı sürece Flask uygulama bağlamını açık tut.
+    with flask_app.app_context():
+        bot = KaplumbikBot()
+        bot.run(settings.discord_token, log_handler=None)
 
 
 if __name__ == "__main__":
     main()
-    

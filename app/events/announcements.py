@@ -1,5 +1,6 @@
 
 import logging
+from datetime import timezone
 
 import discord
 from discord.ext import commands
@@ -12,15 +13,12 @@ logger = logging.getLogger("kaplumbik.events")
 
 
 def format_event(event: Event) -> str:
-    """Format an event for a Discord announcement."""
+    """Format a public event announcement."""
 
     starts_at = event.starts_at
 
     if starts_at.tzinfo is None:
-        # Existing naive database values are treated as UTC.
-        starts_at = starts_at.replace(
-            tzinfo=__import__("datetime").timezone.utc
-        )
+        starts_at = starts_at.replace(tzinfo=timezone.utc)
 
     timestamp = int(starts_at.timestamp())
 
@@ -38,16 +36,12 @@ def format_event(event: Event) -> str:
     if event.game_link:
         lines.append(f"🔗 Oyun bağlantısı: {event.game_link}")
 
-    if event.room_code:
-        lines.append(
-            f"🔑 Oda kodu: {discord.utils.escape_markdown(event.room_code)}"
-        )
-
+    # Oda kodları herkese açık duyurularda gösterilmez.
     return "\n".join(lines)
 
 
 class EventAnnouncementCog(commands.Cog):
-    """Discord commands for displaying scheduled events."""
+    """Commands for displaying upcoming public events."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -60,7 +54,9 @@ class EventAnnouncementCog(commands.Cog):
             events = list_upcoming_events(limit=10)
 
             if not events:
-                await ctx.send("📭 Yaklaşan etkinlik bulunmuyor.")
+                await ctx.send(
+                    "📭 Yaklaşan etkinlik bulunmuyor."
+                )
                 return
 
             for event in events:
@@ -78,3 +74,4 @@ class EventAnnouncementCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(EventAnnouncementCog(bot))
+    

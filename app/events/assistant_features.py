@@ -62,7 +62,7 @@ async def _notify_owner(bot: commands.Bot, details: str):
 
 def _ai_request(prompt: str, personality: str) -> str:
     if not settings.openrouter_api_key:
-        return "Şu an yapay zekâ bağlantım ayarlı değil. Yönetici panelinden AI anahtarını ortam değişkeni olarak eklemeli."
+        raise RuntimeError("OPENROUTER_API_KEY ayarlanmamış.")
     response = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
         headers={

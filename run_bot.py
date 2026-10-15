@@ -1,7 +1,10 @@
 import logging
+import os
+import threading
 
 import discord
 from discord.ext import commands
+from waitress import serve
 
 from app import create_app
 from app.core.config import settings

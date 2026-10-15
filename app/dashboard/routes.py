@@ -10,6 +10,7 @@ from flask import (
     abort,
     flash,
     redirect,
+    HTTPException,
     render_template_string,
     request,
     session,
@@ -225,6 +226,8 @@ def callback():
         session["username"] = str(user.get("global_name") or user.get("username") or "Yönetici")[:100]
         session["csrf_token"] = secrets.token_urlsafe(32)
         return redirect(url_for("dashboard.index"))
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Discord OAuth callback failed.")
         abort(502, description="Discord girişi tamamlanamadı. OAuth URL ve anahtarları kontrol et.")

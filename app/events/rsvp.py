@@ -130,8 +130,8 @@ class EventRSVPCog(commands.Cog):
         from app.database.event_models import Event
         app = create_app()
         with app.app_context():
-            events = db.session.query(Event).filter_by(status="scheduled").all()
-            event_ids = [event.id for event in events]
+            events = db.session.query(Event.id).all()
+            event_ids = [row.id for row in events]
         for event_id in event_ids:
             self.bot.add_view(EventRSVPView(event_id))
 

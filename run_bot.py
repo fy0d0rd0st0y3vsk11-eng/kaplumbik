@@ -31,13 +31,19 @@ class KaplumbikBot(commands.Bot):
         )
 
     async def setup_hook(self):
-        logger.info("Kaplumbik komut altyapısı hazırlanıyor.")
+        logger.info("Kaplumbik hazırlanıyor...")
 
         await self.load_extension(
             "app.events.announcements"
         )
 
-        logger.info("Etkinlik duyuru modülü yüklendi.")
+        logger.info("Etkinlik duyuru sistemi yüklendi.")
+
+        await self.load_extension(
+            "app.events.rsvp"
+        )
+
+        logger.info("Etkinlik katılım butonları yüklendi.")
 
     async def on_ready(self):
         logger.info(
@@ -55,7 +61,10 @@ def main():
         )
 
     bot = KaplumbikBot()
-    bot.run(settings.discord_token, log_handler=None)
+    bot.run(
+        settings.discord_token,
+        log_handler=None,
+    )
 
 
 if __name__ == "__main__":

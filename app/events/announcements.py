@@ -36,7 +36,9 @@ def format_event(event: Event) -> str:
     if event.game_link:
         lines.append(f"🔗 Oyun bağlantısı: {event.game_link}")
 
-    # Oda kodları herkese açık duyurularda gösterilmez.
+    if event.room_code and "among us" in event.game.casefold():
+        lines.append(f"🚀 Among Us oda kodu: **{discord.utils.escape_markdown(event.room_code)}**")
+
     return "\n".join(lines)
 
 

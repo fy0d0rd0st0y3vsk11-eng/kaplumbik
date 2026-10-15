@@ -69,6 +69,7 @@ def test_reward_requires_confirmed_attendance(app):
         profile = UserProfile.query.filter_by(
             discord_id="123456789"
         ).one()
+
         assert profile.balance == 50
         assert EconomyTransaction.query.count() == 0
 
@@ -87,11 +88,15 @@ def test_confirmed_attendance_can_be_rewarded_once(app):
         )
 
         assert transaction.amount == 10
+        assert transaction.balance_after == 60
 
         profile = UserProfile.query.filter_by(
             discord_id="123456789"
         ).one()
+
         assert profile.balance == 60
+        assert participation.reward_approved is True
+        assert participation.reward_transaction_id == transaction.id
 
         with pytest.raises(EventRewardError):
             approve_event_reward(
@@ -103,3 +108,19 @@ def test_confirmed_attendance_can_be_rewarded_once(app):
 
         assert profile.balance == 60
         assert EconomyTransaction.query.count() == 1
+
+
+def test_invalid_reward_amount_is_rejected(app):
+    with app.app_context():
+        for amount in (0, -10, True, 1.5):
+            with pytest.raises(ValueError):
+                approve_event_reward(
+                    event_id=1,
+                    discord_id="123456789",
+                    manager_discord_id="987654321",
+                    reward_amount=amount,
+                )
+
+        assert UserProfile.query.one().balance == 50
+        assert EconomyTransaction.query.count() == 0
+        

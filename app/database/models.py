@@ -94,6 +94,8 @@ class EconomyTransaction(db.Model):
         index=True,
     )
 
+    user = db.relationship("UserProfile", backref="transactions")
+
     __table_args__ = (
         CheckConstraint(
             "balance_after >= 0",

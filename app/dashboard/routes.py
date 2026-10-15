@@ -213,7 +213,7 @@ def callback():
         abort(503, description="Discord OAuth ayarları eksik.")
     try:
         token = discord_oauth.authorize_access_token()
-        response = discord_oauth.get("users/@me", token=token)
+        response = discord_oauth.get("users/@me")
         response.raise_for_status()
         user = response.json()
         discord_id = str(user.get("id", ""))

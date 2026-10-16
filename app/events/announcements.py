@@ -23,20 +23,22 @@ def format_event(event: Event) -> str:
     timestamp = int(starts_at.timestamp())
 
     lines = [
-        f"🎮 **{discord.utils.escape_markdown(event.title)}**",
-        f"🕹️ Oyun: {discord.utils.escape_markdown(event.game)}",
+        f"🎮 **{discord.utils.escape_mentions(discord.utils.escape_markdown(event.title))}**",
+        f"🕹️ Oyun: {discord.utils.escape_mentions(discord.utils.escape_markdown(event.game))}",
         f"🕒 Başlangıç: <t:{timestamp}:F>",
     ]
 
     if event.description:
         lines.append(
-            discord.utils.escape_markdown(event.description)
+            discord.utils.escape_mentions(discord.utils.escape_markdown(event.description))
         )
 
     if event.game_link:
-        lines.append(f"🔗 Oyun bağlantısı: {event.game_link}")
+        lines.append(f"🔗 Oyun bağlantısı: {discord.utils.escape_mentions(event.game_link)}")
 
-    # Oda kodları herkese açık duyurularda gösterilmez.
+    if event.room_code and "among us" in event.game.casefold():
+        lines.append(f"🚀 Among Us oda kodu: **{discord.utils.escape_mentions(discord.utils.escape_markdown(event.room_code))}**")
+
     return "\n".join(lines)
 
 
@@ -61,7 +63,7 @@ class EventAnnouncementCog(commands.Cog):
 
             for event in events:
                 await ctx.send(
-                    format_event(event),
+                    f"**Etkinlik #{event.id}**\n" + format_event(event) + f"\nKatılım butonları: `!etkinlik {event.id}`",
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
 

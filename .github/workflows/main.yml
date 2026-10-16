@@ -26,6 +26,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Compile all Python modules
+        run: python -m compileall -q app run_bot.py
+
       - name: Run tests
         run: python -m pytest -q
         

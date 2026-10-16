@@ -35,6 +35,7 @@ def create_app(test_config=None):
     # Register all database models before create_all().
     from app.database import models  # noqa: F401
     from app.database import event_models  # noqa: F401
+    from app.database import advanced_models  # noqa: F401
 
     with app.app_context():
         from app.database import db
@@ -42,6 +43,7 @@ def create_app(test_config=None):
 
     from app.dashboard import dashboard_bp
     from app.dashboard import routes as dashboard_routes
+    from app.dashboard import advanced_routes  # noqa: F401
 
     dashboard_routes.oauth.init_app(app)
     app.register_blueprint(dashboard_bp)

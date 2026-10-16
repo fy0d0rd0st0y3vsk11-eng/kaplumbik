@@ -4,6 +4,10 @@ import logging
 import discord
 from discord.ext import commands
 
+from app import create_app
+from app.database import db
+from app.database.event_models import Event
+from app.events.feature_service import get_rsvp_summary
 from app.events.service import (
     EventNotFoundError,
     EventStateError,
@@ -21,6 +25,10 @@ class EventRSVPView(discord.ui.View):
     def __init__(self, event_id: int):
         super().__init__(timeout=None)
         self.event_id = event_id
+        for item in self.children:
+            if isinstance(item, discord.ui.Button) and item.custom_id:
+                suffix = item.custom_id.rsplit(":", 1)[-1]
+                item.custom_id = f"kaplumbik:rsvp:{event_id}:{suffix}"
 
     async def respond(
         self,
@@ -39,10 +47,27 @@ class EventRSVPView(discord.ui.View):
             else:
                 message = "📝 Katılmayacağını kaydettim."
 
-            await interaction.response.send_message(
-                message,
-                ephemeral=True,
+            event = db.session.get(Event, self.event_id)
+            summary = get_rsvp_summary(self.event_id)
+            embed = discord.Embed(
+                title=event.title if event else f"Etkinlik #{self.event_id}",
+                description=event.description or "Açıklama eklenmemiş." if event else "",
+                color=discord.Color.green(),
             )
+            if event:
+                embed.add_field(name="Oyun", value=event.game, inline=True)
+                embed.add_field(name="Başlangıç", value=f"<t:{int(event.starts_at.replace(tzinfo=event.starts_at.tzinfo or __import__('datetime').timezone.utc).timestamp())}:F>", inline=False)
+                if event.game_link:
+                    embed.add_field(name="Oyun bağlantısı", value=event.game_link, inline=False)
+            def member_list(ids):
+                shown = [f"<@{user_id}>" for user_id in ids[:12]]
+                if len(ids) > 12:
+                    shown.append(f"… ve {len(ids) - 12} kişi daha")
+                return ", ".join(shown) if shown else "Henüz yanıt yok"
+            embed.add_field(name=f"Katılacağım ({len(summary['going'])})", value=member_list(summary["going"]), inline=False)
+            embed.add_field(name=f"Katılmayacağım ({len(summary['not_going'])})", value=member_list(summary["not_going"]), inline=False)
+            await interaction.response.edit_message(embed=embed, view=self, allowed_mentions=discord.AllowedMentions.none())
+            await interaction.followup.send(message, ephemeral=True)
 
         except EventNotFoundError:
             await interaction.response.send_message(
@@ -98,6 +123,18 @@ class EventRSVPCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def cog_load(self):
+        # Re-register persistent event buttons after bot restarts.
+        from app import create_app
+        from app.database import db
+        from app.database.event_models import Event
+        app = create_app()
+        with app.app_context():
+            events = db.session.query(Event.id).all()
+            event_ids = [row.id for row in events]
+        for event_id in event_ids:
+            self.bot.add_view(EventRSVPView(event_id))
+
     @commands.command(name="etkinlik")
     async def event_details(
         self,
@@ -142,6 +179,9 @@ class EventRSVPCog(commands.Cog):
                     inline=False,
                 )
 
+            summary = get_rsvp_summary(event.id)
+            embed.add_field(name=f"Katılacağım ({len(summary['going'])})", value=", ".join(f"<@{user_id}>" for user_id in summary["going"][:12]) or "Henüz yanıt yok", inline=False)
+            embed.add_field(name=f"Katılmayacağım ({len(summary['not_going'])})", value=", ".join(f"<@{user_id}>" for user_id in summary["not_going"][:12]) or "Henüz yanıt yok", inline=False)
             await ctx.send(
                 embed=embed,
                 view=EventRSVPView(event.id),

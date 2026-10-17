@@ -277,6 +277,8 @@ def create_event_route():
         local_start = datetime.fromisoformat(request.form.get("starts_at", ""))
         if local_start.tzinfo is None:
             local_start = local_start.replace(tzinfo=ZoneInfo("Europe/Istanbul"))
+        if local_start.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+            raise ValueError("Etkinlik başlangıcı gelecekte olmalı.")
         event = create_event(
             title=title, game=game, starts_at=local_start,
             created_by=str(session["discord_id"]),

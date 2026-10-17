@@ -191,3 +191,12 @@ def test_legacy_daily_announcement_default_is_disabled(assistant_app):
     with assistant_app.app_context():
         set_setting("daily_announcement_text", LEGACY_DAILY_ANNOUNCEMENT)
         assert get_setting("daily_announcement_text") == ""
+
+
+def test_daily_announcement_slot_allows_short_retries():
+    moment = datetime(2030, 1, 1, 12, 0, tzinfo=timezone.utc)
+    assert scheduler._due_daily_slot(moment, "12:00,17:00") == "12:00"
+    assert scheduler._due_daily_slot(moment.replace(minute=4), "12:00,17:00") == "12:00"
+    assert scheduler._due_daily_slot(moment.replace(minute=5), "12:00,17:00") is None
+    assert scheduler._due_daily_slot(moment.replace(minute=3), "12:00,12:03") == "12:03"
+    assert scheduler._due_daily_slot(moment.replace(minute=2), "bad,12:00") == "12:00"

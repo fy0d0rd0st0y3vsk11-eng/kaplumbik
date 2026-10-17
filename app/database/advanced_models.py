@@ -50,3 +50,14 @@ class BotHealthRecord(db.Model):
     status = db.Column(db.String(20), nullable=False)
     details = db.Column(db.String(500), nullable=True)
     checked_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
+
+
+class PersonProfile(db.Model):
+    """Owner-maintained public/member intro facts for Kaplumbik's Q&A."""
+    __tablename__ = "person_profiles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, index=True)
+    info = db.Column(db.Text, nullable=False, default="")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)

@@ -220,7 +220,7 @@ class MahzenCommands(commands.Cog):
         app = create_app()
         try:
             with app.app_context():
-                giveaway = db.session.get(Giveaway, cekilis_id)
+                giveaway = db.session.execute(select(Giveaway).where(Giveaway.id == cekilis_id).with_for_update()).scalar_one_or_none()
                 if giveaway is None:
                     await interaction.response.send_message("Bu çekilişi bulamadım.", ephemeral=True)
                     return
@@ -314,7 +314,7 @@ class MahzenCommands(commands.Cog):
         app = create_app()
         try:
             with app.app_context():
-                giveaway = db.session.get(Giveaway, cekilis_id)
+                giveaway = db.session.execute(select(Giveaway).where(Giveaway.id == cekilis_id).with_for_update()).scalar_one_or_none()
                 if giveaway is None:
                     await interaction.response.send_message("Bu çekilişi bulamadım.", ephemeral=True)
                     return

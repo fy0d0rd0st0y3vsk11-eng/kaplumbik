@@ -340,7 +340,7 @@ def giveaway_save():
 @owner_required
 def giveaway_end(giveaway_id):
     _require_csrf()
-    giveaway = db.session.get(Giveaway, giveaway_id)
+    giveaway = db.session.execute(db.select(Giveaway).where(Giveaway.id == giveaway_id).with_for_update()).scalar_one_or_none()
     if giveaway is None:
         flash("Çekiliş bulunamadı.")
         return redirect(url_for("dashboard.advanced_index"))

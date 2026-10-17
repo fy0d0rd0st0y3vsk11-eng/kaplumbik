@@ -316,6 +316,12 @@ def giveaway_end(giveaway_id):
         flash("Bu çekiliş zaten açık değil.")
         return redirect(url_for("dashboard.advanced_index"))
     try:
+        starts_at = giveaway.starts_at
+        if starts_at.tzinfo is None:
+            starts_at = starts_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) < starts_at:
+            flash("Çekiliş zamanı henüz gelmedi. Zamanı gelince kazanan seçebilirsin.")
+            return redirect(url_for("dashboard.advanced_index"))
         entrants = db.session.query(GiveawayParticipant).filter_by(giveaway_id=giveaway.id).all()
         if not entrants:
             flash("Katılımcı yok; kazanan seçilmedi. Önce katılımcıların katılması gerekiyor.")

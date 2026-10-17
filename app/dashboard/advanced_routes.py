@@ -316,6 +316,9 @@ def giveaway_save():
         if local_start.tzinfo is None:
             local_start = local_start.replace(tzinfo=ZoneInfo("Europe/Istanbul"))
         starts_at = local_start.astimezone(timezone.utc)
+        if starts_at <= datetime.now(timezone.utc):
+            flash("Çekiliş zamanı gelecekte olmalı.")
+            return redirect(url_for("dashboard.advanced_index"))
         giveaway = Giveaway(
             title=title, prize=prize, description=description,
             starts_at=starts_at, status="open",

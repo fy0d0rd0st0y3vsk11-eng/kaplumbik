@@ -179,3 +179,9 @@ def test_ai_request_falls_back_when_primary_returns_invalid_json(monkeypatch):
     monkeypatch.setattr(assistant_features.requests, "post", fake_post)
     assert assistant_features._ai_request("Bir soru", "") == "Yedek model yanıtı."
     assert models == ["custom/primary", "openai/gpt-4o-mini"]
+
+
+def test_daily_announcement_is_disabled_until_owner_writes_text():
+    from app.events.feature_service import DEFAULT_SETTINGS
+
+    assert DEFAULT_SETTINGS["daily_announcement_text"] == ""

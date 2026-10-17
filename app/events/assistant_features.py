@@ -65,28 +65,67 @@ async def _notify_owner(bot: commands.Bot, details: str):
 def _ai_request(prompt: str, personality: str) -> str:
     if not settings.openrouter_api_key:
         raise RuntimeError("OPENROUTER_API_KEY ayarlanmamış.")
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {settings.openrouter_api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/fy0d0rd0st0y3vsk11-eng/kaplumbik",
-            "X-Title": "Kaplumbik",
-        },
-        json={
-            "model": settings.openrouter_model or "openai/gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": personality[:6000]},
-                {"role": "user", "content": prompt[:3000]},
-            ],
-            "temperature": 0.7,
-            "max_tokens": 450,
-        },
-        timeout=20,
-    )
-    response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"].strip()[:1900]
+
+    primary_model = (settings.openrouter_model or "openai/gpt-4o-mini").strip()
+    fallback_model = "openai/gpt-4o-mini"
+    models = [primary_model]
+    if primary_model != fallback_model:
+        models.append(fallback_model)
+
+    headers = {
+        "Authorization": f"Bearer {settings.openrouter_api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/fy0d0rd0st0y3vsk11-eng/kaplumbik",
+        "X-Title": "Kaplumbik",
+    }
+
+    for index, model in enumerate(models):
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": (personality or "").strip()[:6000]
+                     or "Sen Kaplumbik adlı Mahzen Discord sunucusunun yardımcı botusun. Türkçe, doğal ve saygılı cevap ver."},
+                    {"role": "user", "content": (prompt or "").strip()[:3000]},
+                ],
+                "temperature": 0.7,
+                "max_tokens": 450,
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise RuntimeError("OpenRouter geçerli JSON yanıtı döndürmedi.") from exc
+
+        choices = data.get("choices") if isinstance(data, dict) else None
+        message = choices[0].get("message") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
+
+        # Bazı modeller content alanını null veya metin blokları listesi olarak döndürebilir.
+        if isinstance(content, list):
+            content = "".join(
+                part.get("text", "")
+                for part in content
+                if isinstance(part, dict) and isinstance(part.get("text"), str)
+            )
+        answer = content.strip() if isinstance(content, str) else ""
+        if answer:
+            return answer[:1900]
+
+        if index + 1 < len(models):
+            logger.warning("OpenRouter modeli %s boş metin döndürdü; yedek model deneniyor.", model)
+            continue
+
+        finish_reason = choices[0].get("finish_reason") if isinstance(choices, list) and choices and isinstance(choices[0], dict) else None
+        raise RuntimeError(
+            f"OpenRouter boş bir AI yanıtı döndürdü (model: {model}, bitiş nedeni: {finish_reason or 'bilinmiyor'})."
+        )
+
+    raise RuntimeError("OpenRouter hiçbir modelden metin yanıtı döndürmedi.")
 
 
 class AssistantFeatures(commands.Cog):

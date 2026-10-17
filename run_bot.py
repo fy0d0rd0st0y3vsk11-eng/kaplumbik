@@ -36,7 +36,7 @@ class KaplumbikBot(commands.Bot):
         self.tree.on_error = self._handle_app_command_error
 
     async def _handle_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        original = getattr(error, "original", error)
+        original = getattr(error, "original", None) or error
         if isinstance(original, app_commands.MissingPermissions):
             message = "Bu komut için gerekli yönetici iznine sahip değilsin."
         else:

@@ -193,6 +193,9 @@ def _ai_request(prompt: str, personality: str, knowledge: str = "") -> str:
             last_error = RuntimeError(
                 f"OpenRouter boş yanıt döndürdü (model: {model}, neden: {finish_reason or 'bilinmiyor'})."
             )
+        except RuntimeError as exc:
+            last_error = exc
+            logger.warning("Kaplumbik AI yanıtı işlenemedi (%s): %s", model, exc)
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status in (401, 403):

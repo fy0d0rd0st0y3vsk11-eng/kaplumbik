@@ -135,10 +135,10 @@ class EventRSVPCog(commands.Cog):
         for event_id in event_ids:
             self.bot.add_view(EventRSVPView(event_id))
 
-    @commands.command(name="etkinlik")
+    @discord.app_commands.command(name="etkinlik", description="Bir etkinliğin ayrıntılarını ve katılım butonlarını gösterir.")
     async def event_details(
         self,
-        ctx: commands.Context,
+        interaction: discord.Interaction,
         event_id: int,
     ):
         """Show an event and its RSVP buttons."""
@@ -151,8 +151,9 @@ class EventRSVPCog(commands.Cog):
             )
 
             if event is None:
-                await ctx.send(
-                    "Etkinlik bulunamadı veya artık yaklaşan etkinlik değil."
+                await interaction.response.send_message(
+                    "Etkinlik bulunamadı veya artık yaklaşan etkinlik değil.",
+                    ephemeral=True,
                 )
                 return
 
@@ -182,7 +183,7 @@ class EventRSVPCog(commands.Cog):
             summary = get_rsvp_summary(event.id)
             embed.add_field(name=f"Katılacağım ({len(summary['going'])})", value=", ".join(f"<@{user_id}>" for user_id in summary["going"][:12]) or "Henüz yanıt yok", inline=False)
             embed.add_field(name=f"Katılmayacağım ({len(summary['not_going'])})", value=", ".join(f"<@{user_id}>" for user_id in summary["not_going"][:12]) or "Henüz yanıt yok", inline=False)
-            await ctx.send(
+            await interaction.response.send_message(
                 embed=embed,
                 view=EventRSVPView(event.id),
                 allowed_mentions=discord.AllowedMentions.none(),
@@ -190,9 +191,11 @@ class EventRSVPCog(commands.Cog):
 
         except Exception:
             logger.exception("Could not display event details.")
-            await ctx.send(
-                "Etkinlik gösterilirken bir hata oluştu."
-            )
+            error_message = "Etkinlik gösterilirken bir hata oluştu."
+            if interaction.response.is_done():
+                await interaction.followup.send(error_message, ephemeral=True)
+            else:
+                await interaction.response.send_message(error_message, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

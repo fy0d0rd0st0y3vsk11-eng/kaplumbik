@@ -75,9 +75,12 @@ def test_giveaway_prevents_duplicate_entries(app):
 
 
 def test_dashboard_local_time_displays_turkey_time():
-    from app.dashboard.advanced_routes import _local_time
+    from app.dashboard.advanced_routes import _local_time as advanced_local_time
+    from app.dashboard.routes import _local_time as main_local_time
 
     utc_value = datetime(2030, 1, 1, 18, 0, tzinfo=timezone.utc)
     naive_utc_value = datetime(2030, 1, 1, 18, 0)
-    assert _local_time(utc_value) == "01.01.2030 21:00"
-    assert _local_time(naive_utc_value) == "01.01.2030 21:00"
+    assert advanced_local_time(utc_value) == "01.01.2030 21:00"
+    assert advanced_local_time(naive_utc_value) == "01.01.2030 21:00"
+    assert main_local_time(utc_value) == "01.01.2030 21:00"
+    assert main_local_time(naive_utc_value) == "01.01.2030 21:00"

@@ -364,11 +364,19 @@ class MahzenCommands(commands.Cog):
                     games.append(f"**{label}:** {discord.utils.escape_mentions(value)}")
         sections = [info[:3000]] if info else ["Mahzen hakkında henüz panelden bilgi girilmemiş."]
         sections.extend(games)
+        content = "\n\n".join(sections)
+        chunks = [content[index:index + 1900] for index in range(0, len(content), 1900)] or ["Mahzen bilgisi henüz boş."]
         await interaction.response.send_message(
-            "\n\n".join(sections)[:3900],
+            chunks[0],
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )
+        for chunk in chunks[1:]:
+            await interaction.followup.send(
+                chunk,
+                ephemeral=True,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
     @app_commands.command(name="oyunlar", description="Mahzen'de ayarlanmış oyun bağlantılarını ve oda bilgilerini göster.")
     async def game_links(self, interaction: discord.Interaction):

@@ -14,6 +14,7 @@ from app.database.advanced_models import AnnouncementLog, PersonProfile
 from app.database.event_models import Event
 from app.events.announcements import format_event
 from app.events.feature_service import get_setting, record_health
+from app.events.mahzen_commands import PersonSelectView
 
 logger = logging.getLogger("kaplumbik.features")
 
@@ -336,27 +337,25 @@ class AssistantFeatures(commands.Cog):
         else:
             await interaction.response.send_message("Tasarımcı Discord ID'si henüz yönetim panelinde ayarlanmamış.")
 
-    @discord.app_commands.command(name="tanit", description="Kayıtlı bir kişiyi tanıtır.")
-    async def introduce_member(self, interaction: discord.Interaction, kisi_adi: str):
-        await interaction.response.defer(thinking=True)
+    @discord.app_commands.command(name="tanit", description="Listeden bir Mahzen üyesi seçip tanıtımını oku.")
+    async def introduce_member(self, interaction: discord.Interaction):
         app = create_app()
         with app.app_context():
             from sqlalchemy import select
-            candidates = db.session.execute(
-                select(PersonProfile).order_by(PersonProfile.name.asc()).limit(200)
+            people = db.session.execute(
+                select(PersonProfile).order_by(PersonProfile.name.asc()).limit(25)
             ).scalars().all()
-            folded = kisi_adi.strip().casefold()
-            person = next((item for item in candidates if item.name.casefold() == folded), None)
-            if person is None:
-                person = next((item for item in candidates if folded and folded in item.name.casefold()), None)
-            if person is None:
-                await interaction.followup.send(
-                    f"'{kisi_adi[:100]}' için kayıtlı bir tanıtım bulamadım. Yönetim panelindeki Kişi tanıtımları bölümünden eklenebilir.",
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
-                return
-            answer = f"**{person.name} kimdir?**\n{person.info[:3800]}"
-        await interaction.followup.send(answer, allowed_mentions=discord.AllowedMentions.none())
+        if not people:
+            await interaction.response.send_message(
+                "Henüz kişi tanıtımı eklenmemiş. Yönetim panelindeki Kişi tanıtımları bölümünden eklenebilir.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(
+            "Kimi merak ettin? Listeden seç, tanıtımını göstereyim. 🐢",
+            view=PersonSelectView(people),
+            ephemeral=True,
+        )
 
     @discord.app_commands.command(name="profil", description="Senin veya seçtiğin üyenin Kaplumbik profilini gösterir.")
     async def profile(self, interaction: discord.Interaction, member: discord.Member | None = None):

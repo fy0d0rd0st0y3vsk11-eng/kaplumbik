@@ -156,6 +156,36 @@ def person_save():
     return redirect(url_for("dashboard.advanced_index"))
 
 
+@dashboard_bp.post("/advanced/people/<int:person_id>/update")
+@owner_required
+def person_update(person_id):
+    _require_csrf()
+    person = db.session.get(PersonProfile, person_id)
+    if person is None:
+        flash("Bu kişi tanıtımı artık bulunmuyor.")
+        return redirect(url_for("dashboard.advanced_index"))
+    name = request.form.get("name", "").strip()
+    info = request.form.get("info", "").strip()
+    if not name or not info or len(name) > 100 or len(info) > 4000:
+        flash("İsim ve bilgi alanları boş olamaz; isim en fazla 100, bilgi 4000 karakter olabilir.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        person.name = name
+        person.info = info
+        db.session.add(AuditLog(
+            actor_discord_id=str(session["discord_id"]),
+            action="person.update", target_type="person_profile", target_id=str(person.id),
+            details={"name": name}, success=True,
+        ))
+        db.session.commit()
+        flash(f"{name} kişi tanıtımı güncellendi.")
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not update person profile")
+        flash("Kişi tanıtımı güncellenemedi.")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
 @dashboard_bp.post("/advanced/people/<int:person_id>/delete")
 @owner_required
 def person_delete(person_id):
@@ -178,6 +208,82 @@ def person_delete(person_id):
         db.session.rollback()
         logger.exception("Could not delete person profile")
         flash("Kişi tanıtımı silinemedi.")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/giveaways")
+@owner_required
+def giveaway_save():
+    _require_csrf()
+    title = request.form.get("title", "").strip()
+    prize = request.form.get("prize", "").strip()
+    description = request.form.get("description", "").strip()
+    starts_raw = request.form.get("starts_at", "").strip()
+    if not title or not prize or not starts_raw:
+        flash("Çekiliş adı, ödülü ve başlangıç zamanı gerekli.")
+        return redirect(url_for("dashboard.advanced_index"))
+    if len(title) > 150 or len(prize) > 300 or len(description) > 1500:
+        flash("Çekiliş adı, ödül veya açıklama izin verilen uzunluğu aştı.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        local_start = datetime.fromisoformat(starts_raw)
+        if local_start.tzinfo is None:
+            local_start = local_start.replace(tzinfo=ZoneInfo("Europe/Istanbul"))
+        starts_at = local_start.astimezone(timezone.utc)
+        giveaway = Giveaway(
+            title=title, prize=prize, description=description,
+            starts_at=starts_at, status="open",
+            created_by=str(session["discord_id"]),
+        )
+        db.session.add(giveaway)
+        db.session.flush()
+        db.session.add(AuditLog(
+            actor_discord_id=str(session["discord_id"]),
+            action="giveaway.create", target_type="giveaway", target_id=str(giveaway.id),
+            details={"title": title, "prize": prize, "starts_at": starts_at.isoformat()},
+            success=True,
+        ))
+        db.session.commit()
+        flash(f"Çekiliş #{giveaway.id} kaydedildi.")
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not create giveaway")
+        flash("Çekiliş kaydedilemedi. Tarih/saat alanını kontrol et.")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/giveaways/<int:giveaway_id>/end")
+@owner_required
+def giveaway_end(giveaway_id):
+    _require_csrf()
+    giveaway = db.session.get(Giveaway, giveaway_id)
+    if giveaway is None:
+        flash("Çekiliş bulunamadı.")
+        return redirect(url_for("dashboard.advanced_index"))
+    if giveaway.status != "open":
+        flash("Bu çekiliş zaten açık değil.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        entrants = db.session.query(GiveawayParticipant).filter_by(giveaway_id=giveaway.id).all()
+        if not entrants:
+            flash("Katılımcı yok; kazanan seçilmedi. Önce katılımcıların katılması gerekiyor.")
+            return redirect(url_for("dashboard.advanced_index"))
+        winner = secrets.choice(entrants)
+        giveaway.winner_discord_id = winner.discord_id
+        giveaway.status = "ended"
+        giveaway.ended_at = datetime.now(timezone.utc)
+        db.session.add(AuditLog(
+            actor_discord_id=str(session["discord_id"]),
+            action="giveaway.end", target_type="giveaway", target_id=str(giveaway.id),
+            details={"winner_discord_id": winner.discord_id, "participant_count": len(entrants)},
+            success=True,
+        ))
+        db.session.commit()
+        flash(f"Çekiliş #{giveaway.id} bitti. Kazanan Discord ID: {winner.discord_id}")
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not end giveaway")
+        flash("Çekiliş bitirilemedi.")
     return redirect(url_for("dashboard.advanced_index"))
 
 

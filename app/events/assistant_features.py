@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import unicodedata
 from datetime import datetime, timezone
 
 import discord
@@ -91,6 +92,11 @@ def _load_conversation_memory(guild_id: str, discord_id: str, query_text: str = 
         )[-8000:]
 
 
+def _normalize_trigger_text(text: str) -> str:
+    # Unicode casefold expands Turkish capital İ to "i" + combining dot.
+    return unicodedata.normalize("NFKC", (text or "").casefold()).replace("\u0307", "")
+
+
 def _is_swearing(text: str) -> bool:
     patterns = (
         r"\bamk\b", r"\baq\b", r"\bamina\s*(?:koy|sik|sic|sıç)\w*", r"\bamına\s*(?:koy|sik|sic|sıç)\w*",
@@ -98,13 +104,12 @@ def _is_swearing(text: str) -> bool:
         r"\bsik\w*", r"\bfuck\w*", r"\bshit\b", r"\bbitch\w*",
         r"\basshole\b", r"\bmotherfucker\w*", r"\bdamn\b",
     )
-    folded = (text or "").casefold()
+    folded = _normalize_trigger_text(text)
     return any(re.search(pattern, folded) for pattern in patterns)
 
 
 def _mentions_ruyar(text: str) -> bool:
-    return bool(re.search(r"(?<!\w)(?:ruyar|ruya|ruyiş)(?!\w)", (text or "").casefold()))
-
+    return bool(re.search(r"(?<!\w)(?:ruyar|ruya|ruyiş)(?!\w)", _normalize_trigger_text(text)))
 
 def _assistant_knowledge(prompt: str) -> str:
     """Load only owner-entered server facts and matching person profiles."""

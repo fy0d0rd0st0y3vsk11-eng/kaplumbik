@@ -72,3 +72,12 @@ def test_giveaway_prevents_duplicate_entries(app):
         with pytest.raises(IntegrityError):
             db.session.commit()
         db.session.rollback()
+
+
+def test_dashboard_local_time_displays_turkey_time():
+    from app.dashboard.advanced_routes import _local_time
+
+    utc_value = datetime(2030, 1, 1, 18, 0, tzinfo=timezone.utc)
+    naive_utc_value = datetime(2030, 1, 1, 18, 0)
+    assert _local_time(utc_value) == "01.01.2030 21:00"
+    assert _local_time(naive_utc_value) == "01.01.2030 21:00"

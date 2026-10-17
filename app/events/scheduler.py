@@ -85,6 +85,25 @@ def _event_announcement_message(event):
     return message[:1850]
 
 
+def _due_daily_slot(local_now, times):
+    """Return the most recent configured daily slot within five minutes."""
+    current_minute = local_now.hour * 60 + local_now.minute
+    due = []
+    for raw in (times or "").split(","):
+        slot = raw.strip()
+        if not slot:
+            continue
+        try:
+            parsed = datetime.strptime(slot, "%H:%M")
+        except ValueError:
+            continue
+        target_minute = parsed.hour * 60 + parsed.minute
+        elapsed = current_minute - target_minute
+        if 0 <= elapsed <= 4:
+            due.append((elapsed, slot))
+    return min(due)[1] if due else None
+
+
 class EventScheduler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -225,8 +244,8 @@ class EventScheduler(commands.Cog):
     async def _daily_announcement(self, channel):
         local_now = datetime.now(TR)
         times = await asyncio.to_thread(_read_setting, "announcement_times", "12:00,17:00,20:00")
-        current_slot = local_now.strftime("%H:%M")
-        if current_slot not in [x.strip() for x in times.split(",")]:
+        current_slot = _due_daily_slot(local_now, times)
+        if not current_slot:
             return
         kind = f"daily:{local_now.strftime('%Y-%m-%d')}:{current_slot}"
         app = create_app()

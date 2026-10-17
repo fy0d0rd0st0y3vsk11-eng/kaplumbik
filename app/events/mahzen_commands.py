@@ -264,11 +264,13 @@ class MahzenCommands(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         except IntegrityError:
-            db.session.rollback()
+            with app.app_context():
+                db.session.rollback()
             if not interaction.response.is_done():
                 await interaction.response.send_message("Zaten katılmış görünüyorsun.", ephemeral=True)
         except Exception:
-            db.session.rollback()
+            with app.app_context():
+                db.session.rollback()
             logger.exception("Could not join giveaway")
             if not interaction.response.is_done():
                 await interaction.response.send_message("Çekilişe katılım kaydedilemedi. Birazdan tekrar dene.", ephemeral=True)
@@ -340,7 +342,8 @@ class MahzenCommands(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         except Exception:
-            db.session.rollback()
+            with app.app_context():
+                db.session.rollback()
             logger.exception("Could not finish giveaway")
             if not interaction.response.is_done():
                 await interaction.response.send_message("Çekiliş bitirilemedi. Paneldeki işlem kayıtlarını kontrol et.", ephemeral=True)

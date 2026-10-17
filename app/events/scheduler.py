@@ -71,7 +71,7 @@ def _event_announcement_message(event):
     message = template
     for key, value in values.items():
         message = message.replace("{" + key + "}", value)
-    message = "\n".join(line for line in message.splitlines() if line.strip())
+    # Preserve the owner's layout and wording; only replace the documented placeholders.
     return message[:1850]
 
 

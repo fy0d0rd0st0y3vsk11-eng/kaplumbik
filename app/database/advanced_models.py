@@ -61,3 +61,45 @@ class PersonProfile(db.Model):
     info = db.Column(db.Text, nullable=False, default="")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class Giveaway(db.Model):
+    """Mahzen-only giveaway controlled by the owner dashboard."""
+    __tablename__ = "mahzen_giveaways"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    prize = db.Column(db.String(300), nullable=False)
+    description = db.Column(db.Text, nullable=False, default="")
+    starts_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default="open", index=True)
+    winner_discord_id = db.Column(db.String(25), nullable=True)
+    created_by = db.Column(db.String(25), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    ended_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    participants = db.relationship(
+        "GiveawayParticipant",
+        backref="giveaway",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
+
+class GiveawayParticipant(db.Model):
+    """A single Discord account's entry in one Mahzen giveaway."""
+    __tablename__ = "mahzen_giveaway_participants"
+
+    id = db.Column(db.Integer, primary_key=True)
+    giveaway_id = db.Column(
+        db.Integer,
+        db.ForeignKey("mahzen_giveaways.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    discord_id = db.Column(db.String(25), nullable=False)
+    joined_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (
+        db.UniqueConstraint("giveaway_id", "discord_id", name="uq_mahzen_giveaway_member"),
+    )

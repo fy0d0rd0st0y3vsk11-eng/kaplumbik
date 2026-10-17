@@ -48,10 +48,10 @@ def _log_delivery(event_id, channel_id, kind, message, success, error=""):
 
 def _reminder_kind(seconds, reminder_minutes):
     """Return the one reminder due at this offset before an event."""
-    if 119 * 60 <= seconds <= 120 * 60:
+    if 118 * 60 <= seconds <= 120 * 60:
         return "final_2h"
     for minutes in reminder_minutes:
-        if (minutes * 60 - 30) <= seconds <= (minutes * 60 + 30):
+        if (minutes * 60 - 120) <= seconds <= (minutes * 60 + 120):
             return f"reminder_{minutes}m"
     return None
 

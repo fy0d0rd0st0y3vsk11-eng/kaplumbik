@@ -31,7 +31,7 @@ def _get_people():
     app = create_app()
     with app.app_context():
         return db.session.execute(
-            select(PersonProfile).order_by(PersonProfile.name.asc()).limit(25)
+            select(PersonProfile).order_by(PersonProfile.name.asc()).limit(1000)
         ).scalars().all()
 
 
@@ -114,10 +114,42 @@ class PersonSelect(discord.ui.Select):
                 )
 
 
+class PersonPageButton(discord.ui.Button):
+    def __init__(self, direction: int, disabled: bool = False):
+        label = "← Önceki 25 kişi" if direction < 0 else "Sonraki 25 kişi →"
+        super().__init__(
+            label=label,
+            style=discord.ButtonStyle.secondary,
+            disabled=disabled,
+            custom_id=f"mahzen:person-page:{direction}",
+        )
+        self.direction = direction
+
+    async def callback(self, interaction: discord.Interaction):
+        view = self.view
+        if not isinstance(view, PersonSelectView):
+            await interaction.response.defer()
+            return
+        view.page = max(0, min(view.page + self.direction, view.page_count - 1))
+        view.refresh_items()
+        await interaction.response.edit_message(view=view)
+
+
 class PersonSelectView(discord.ui.View):
-    def __init__(self, people):
+    def __init__(self, people, page: int = 0):
         super().__init__(timeout=120)
-        self.add_item(PersonSelect(people))
+        self.people = list(people)
+        self.page_count = max(1, (len(self.people) + 24) // 25)
+        self.page = max(0, min(page, self.page_count - 1))
+        self.refresh_items()
+
+    def refresh_items(self):
+        self.clear_items()
+        page_people = self.people[self.page * 25:(self.page + 1) * 25]
+        self.add_item(PersonSelect(page_people))
+        if self.page_count > 1:
+            self.add_item(PersonPageButton(-1, disabled=self.page == 0))
+            self.add_item(PersonPageButton(1, disabled=self.page >= self.page_count - 1))
 
 
 class MahzenCommands(commands.Cog):

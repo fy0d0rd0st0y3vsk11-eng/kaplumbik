@@ -1,0 +1,74 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
+from sqlalchemy.exc import IntegrityError
+
+from app import create_app
+from app.database import db
+from app.database.advanced_models import Giveaway, GiveawayParticipant
+
+
+@pytest.fixture
+def app():
+    application = create_app({
+        "TESTING": True,
+        "SECRET_KEY": "test-secret",
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
+    })
+    with application.app_context():
+        db.create_all()
+        yield application
+        db.session.remove()
+        db.drop_all()
+
+
+def test_giveaway_persists_prize_time_and_participants(app):
+    with app.app_context():
+        giveaway = Giveaway(
+            title="Mahzen oyun gecesi",
+            prize="Özel rol",
+            description="Aktif üyeler katılabilir.",
+            starts_at=datetime.now(timezone.utc) + timedelta(hours=2),
+            status="open",
+            created_by="12345678901234567",
+        )
+        db.session.add(giveaway)
+        db.session.flush()
+        participant = GiveawayParticipant(
+            giveaway_id=giveaway.id,
+            discord_id="23456789012345678",
+        )
+        db.session.add(participant)
+        db.session.commit()
+
+        saved = db.session.get(Giveaway, giveaway.id)
+        assert saved.title == "Mahzen oyun gecesi"
+        assert saved.prize == "Özel rol"
+        assert len(saved.participants) == 1
+        assert saved.participants[0].discord_id == "23456789012345678"
+
+
+def test_giveaway_prevents_duplicate_entries(app):
+    with app.app_context():
+        giveaway = Giveaway(
+            title="Tek bilet",
+            prize="Rozet",
+            starts_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            status="open",
+            created_by="12345678901234567",
+        )
+        db.session.add(giveaway)
+        db.session.flush()
+        db.session.add(GiveawayParticipant(
+            giveaway_id=giveaway.id,
+            discord_id="23456789012345678",
+        ))
+        db.session.commit()
+
+        db.session.add(GiveawayParticipant(
+            giveaway_id=giveaway.id,
+            discord_id="23456789012345678",
+        ))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()

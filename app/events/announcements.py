@@ -36,7 +36,7 @@ def format_event(event: Event) -> str:
     if event.game_link:
         lines.append(f"🔗 Oyun bağlantısı: {discord.utils.escape_mentions(event.game_link)}")
 
-    return "\n".join(lines)
+    return "\n".join(lines)[:1700]
 
 
 class EventAnnouncementCog(commands.Cog):

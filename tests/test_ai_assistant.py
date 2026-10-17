@@ -104,12 +104,16 @@ def test_assistant_knowledge_only_includes_matching_person(assistant_app, monkey
         set_setting("server_knowledge", "Mahzen bir oyun topluluğudur.")
         db.session.add(PersonProfile(name="Mert", info="Minecraft oynamayı seviyor."))
         db.session.add(PersonProfile(name="Ada", info="Gartic Phone oynuyor."))
+        db.session.add(PersonProfile(name="Ali", info="Bu bilgi yalnızca Ali ile ilgili sorularda görünmeli."))
         db.session.commit()
 
     knowledge = assistant_features._assistant_knowledge("Mert kim?")
     assert "Mahzen bir oyun topluluğudur." in knowledge
     assert "Mert: Minecraft oynamayı seviyor." in knowledge
     assert "Ada: Gartic Phone oynuyor." not in knowledge
+
+    unrelated_knowledge = assistant_features._assistant_knowledge("Bu kaliteli bir oyun mu?")
+    assert "Ali: Bu bilgi yalnızca Ali ile ilgili sorularda görünmeli." not in unrelated_knowledge
 
 
 def test_event_announcement_uses_owner_written_template(monkeypatch):

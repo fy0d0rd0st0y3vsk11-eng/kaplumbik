@@ -152,3 +152,26 @@ def test_default_event_template_contains_actual_line_breaks():
     template = DEFAULT_SETTINGS["event_announcement_template"]
     assert "\n" in template
     assert r"\n" not in template
+
+
+def test_ai_request_falls_back_when_primary_returns_invalid_json(monkeypatch):
+    install_settings(monkeypatch, model="custom/primary")
+    models = []
+
+    class InvalidJSONResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            raise ValueError("invalid json")
+
+    def fake_post(url, **kwargs):
+        model = kwargs["json"]["model"]
+        models.append(model)
+        if model == "custom/primary":
+            return InvalidJSONResponse()
+        return FakeResponse({"choices": [{"message": {"content": "Yedek model yanıtı."}}]})
+
+    monkeypatch.setattr(assistant_features.requests, "post", fake_post)
+    assert assistant_features._ai_request("Bir soru", "") == "Yedek model yanıtı."
+    assert models == ["custom/primary", "openai/gpt-4o-mini"]

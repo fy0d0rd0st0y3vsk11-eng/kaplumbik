@@ -158,24 +158,25 @@ class AssistantFeatures(commands.Cog):
                 await _notify_owner(self.bot, f"AI yanıtı başarısız: {str(exc)}")
                 await message.reply("Şu an yanıt veremedim; hata yönetim paneline kaydedildi.", mention_author=False)
 
-    @commands.command(name="kimtasarladi", aliases=["tasarlayan", "designer"])
-    async def designer(self, ctx: commands.Context):
+    @discord.app_commands.command(name="kimtasarladi", description="Kaplumbik'i kimin tasarladığını gösterir.")
+    async def designer(self, interaction: discord.Interaction):
         owner_id = await asyncio.to_thread(_setting, "designer_discord_id")
         if not owner_id or not owner_id.isdigit():
             owner_id = settings.owner_discord_id
         if owner_id and owner_id.isdigit():
-            await ctx.send(f"🐢 Kaplumbik'i tasarlayan kişi: <@{owner_id}>", allowed_mentions=discord.AllowedMentions(users=[discord.Object(id=int(owner_id))], roles=False, everyone=False))
+            await interaction.response.send_message(f"🐢 Kaplumbik'i tasarlayan kişi: <@{owner_id}>", allowed_mentions=discord.AllowedMentions(users=[discord.Object(id=int(owner_id))], roles=False, everyone=False))
         else:
-            await ctx.send("Tasarımcı Discord ID'si henüz yönetim panelinde ayarlanmamış.")
+            await interaction.response.send_message("Tasarımcı Discord ID'si henüz yönetim panelinde ayarlanmamış.")
 
-    @commands.command(name="tanit", aliases=["intro"])
-    async def introduce_member(self, ctx: commands.Context, member: discord.Member):
+    @discord.app_commands.command(name="tanit", description="Bir üyeye Mahzen tanıtımını gösterir.")
+    async def introduce_member(self, interaction: discord.Interaction, member: discord.Member):
         intro = await asyncio.to_thread(_setting, "new_member_intro")
-        await ctx.send(f"👋 {member.mention} için Mahzen tanıtımı:\n{intro}", allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False))
+        await interaction.response.send_message(f"👋 {member.mention} için Mahzen tanıtımı:\n{intro}", allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False))
 
-    @commands.command(name="profil")
-    async def profile(self, ctx: commands.Context, member: discord.Member | None = None):
-        member = member or ctx.author
+    @discord.app_commands.command(name="profil", description="Senin veya seçtiğin üyenin Kaplumbik profilini gösterir.")
+    async def profile(self, interaction: discord.Interaction, member: discord.Member | None = None):
+        member = member or interaction.user
+        await interaction.response.defer(thinking=True)
         app = create_app()
         with app.app_context():
             from sqlalchemy import select
@@ -223,21 +224,22 @@ class AssistantFeatures(commands.Cog):
         embed.add_field(name="Son etkinlik", value=last_event.title if last_event else "Henüz yok", inline=False)
         embed.add_field(name="Rozetler", value=", ".join(earned) if earned else "Henüz rozet yok", inline=False)
         embed.add_field(name="Çekiliş uygunluğu", value="Uygun" if eligible else f"Uygun değil (en az {min_points} puan)", inline=False)
-        await ctx.send(embed=embed)
+        await interaction.followup.send(embed=embed)
 
-    @commands.command(name="etkinlikgecmisi")
-    async def event_history(self, ctx: commands.Context, event_id: int):
+    @discord.app_commands.command(name="etkinlikgecmisi", description="Bir etkinliğin katılım kayıtlarını gösterir.")
+    async def event_history(self, interaction: discord.Interaction, event_id: int):
+        await interaction.response.defer(thinking=True)
         app = create_app()
         with app.app_context():
             from app.database.event_models import EventParticipation
             rows = db.session.query(EventParticipation).filter_by(event_id=event_id).all()
             event = db.session.get(Event, event_id)
             if event is None:
-                await ctx.send("Bu etkinlik bulunamadı.")
+                await interaction.followup.send("Bu etkinlik bulunamadı.")
                 return
             going = [f"<@{r.discord_id}>" for r in rows if r.status == "going"]
             not_going = [f"<@{r.discord_id}>" for r in rows if r.status == "not_going"]
-            await ctx.send(f"**{event.title}**\nKatılacağım ({len(going)}): {', '.join(going) or 'yok'}\nKatılmayacağım ({len(not_going)}): {', '.join(not_going) or 'yok'}", allowed_mentions=discord.AllowedMentions.none())
+            await interaction.followup.send(f"**{event.title}**\nKatılacağım ({len(going)}): {', '.join(going) or 'yok'}\nKatılmayacağım ({len(not_going)}): {', '.join(not_going) or 'yok'}", allowed_mentions=discord.AllowedMentions.none())
 
 
 async def setup(bot: commands.Bot):

@@ -67,7 +67,7 @@ def _assistant_knowledge(prompt: str) -> str:
         matches = []
         for person in people:
             name = (person.name or "").strip()
-            if name and name.casefold() in prompt_folded:
+            if name and re.search(rf"(?<!\\w){re.escape(name.casefold())}(?!\\w)", prompt_folded):
                 matches.append(person)
         parts = []
         if server_facts:

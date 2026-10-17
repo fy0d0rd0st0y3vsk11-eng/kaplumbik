@@ -145,6 +145,8 @@ def test_final_event_reminder_is_two_hours_not_twelve():
     assert scheduler._reminder_kind(118 * 60, [15, 5]) == "final_2h"
     assert scheduler._reminder_kind(117 * 60, [15, 5]) is None
     assert scheduler._reminder_kind(12 * 60 * 60, [15, 5]) is None
+    assert scheduler._reminder_kind(0, [1]) is None
+    assert scheduler._reminder_kind(-60, [1]) is None
 
 
 def test_configured_event_reminder_minutes_are_respected():

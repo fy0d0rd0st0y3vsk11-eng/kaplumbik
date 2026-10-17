@@ -291,9 +291,29 @@ class AssistantFeatures(commands.Cog):
                 knowledge = await asyncio.to_thread(_assistant_knowledge, prompt_text)
                 author_name = getattr(message.author, "display_name", message.author.name)
                 guild_name = message.guild.name if message.guild else "özel mesaj"
+                guild_context = ""
+                if message.guild:
+                    guild = message.guild
+                    bot_member = guild.me
+                    visible_channels = [
+                        channel.name for channel in guild.text_channels
+                        if bot_member and channel.permissions_for(bot_member).view_channel
+                    ][:40]
+                    role_names = [
+                        role.name for role in guild.roles
+                        if not role.is_default() and not role.managed
+                    ][:30]
+                    guild_context = (
+                        f"Sunucunun canlı bilgileri: adı={guild.name}; "
+                        f"üye sayısı={guild.member_count if guild.member_count is not None else 'bilinmiyor'}; "
+                        f"mevcut kanal=#{getattr(message.channel, 'name', 'bilinmiyor')}; "
+                        f"botun görebildiği metin kanalları={', '.join(visible_channels) or 'bilinmiyor'}; "
+                        f"roller={', '.join(role_names) or 'bilinmiyor'}."
+                    )
                 contextual_prompt = (
                     f"Mesajı yazan kişi: {author_name}\n"
                     f"Ortam: {guild_name}\n"
+                    f"{guild_context}\n"
                     f"Kullanıcının mesajı: {prompt_text}"
                 )
                 async with message.channel.typing():

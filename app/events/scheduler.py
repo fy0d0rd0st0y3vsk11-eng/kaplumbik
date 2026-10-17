@@ -46,6 +46,16 @@ def _log_delivery(event_id, channel_id, kind, message, success, error=""):
     db.session.commit()
 
 
+def _reminder_kind(seconds, reminder_minutes):
+    """Return the one reminder due at this offset before an event."""
+    if 119 * 60 <= seconds <= 120 * 60:
+        return "final_2h"
+    for minutes in reminder_minutes:
+        if (minutes * 60 - 30) <= seconds <= (minutes * 60 + 30):
+            return f"reminder_{minutes}m"
+    return None
+
+
 def _event_announcement_message(event):
     """Use the owner's template verbatim, replacing only documented placeholders."""
     template = (_read_setting("event_announcement_template", "") or "").strip()
@@ -133,19 +143,13 @@ class EventScheduler(commands.Cog):
                 if starts_at.tzinfo is None:
                     starts_at = starts_at.replace(tzinfo=timezone.utc)
                 seconds = (starts_at - now).total_seconds()
-                kind = None
-                if 719 * 60 <= seconds <= 720 * 60:
-                    kind = "final_2h"
-                else:
-                    reminder_raw = await asyncio.to_thread(_read_setting, "game_reminder_minutes", "15,5")
-                    try:
-                        reminder_minutes = [int(x.strip()) for x in reminder_raw.split(",") if x.strip()]
-                    except ValueError:
-                        reminder_minutes = [15, 5]
-                    for minutes in reminder_minutes:
-                        if (minutes * 60 - 30) <= seconds <= (minutes * 60 + 30):
-                            kind = f"reminder_{minutes}m"
-                            break
+                reminder_raw = await asyncio.to_thread(_read_setting, "game_reminder_minutes", "15,5")
+                try:
+                    reminder_minutes = [int(x.strip()) for x in reminder_raw.split(",") if x.strip()]
+                    reminder_minutes = [minutes for minutes in reminder_minutes if 1 <= minutes <= 1440]
+                except ValueError:
+                    reminder_minutes = [15, 5]
+                kind = _reminder_kind(seconds, reminder_minutes)
                 if not kind:
                     continue
                 app = create_app()

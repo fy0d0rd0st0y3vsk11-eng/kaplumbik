@@ -48,6 +48,19 @@ class KaplumbikBot(commands.Bot):
         await self.load_extension("app.events.scheduler")
         logger.info("Zamanlanmış duyuru sistemi yüklendi.")
 
+        # Slash komutlarını Discord'a kaydet.
+        # Test sunucusu ID'si verilirse komutlar o sunucuda hemen görünür;
+        # verilmezse global kayıt yapılır (yayılması daha uzun sürebilir).
+        guild_id = os.getenv("DISCORD_GUILD_ID", "").strip()
+        if guild_id.isdigit():
+            guild = discord.Object(id=int(guild_id))
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            logger.info("%s slash komutu test sunucusuna kaydedildi.", len(synced))
+        else:
+            synced = await self.tree.sync()
+            logger.info("%s global slash komutu Discord'a kaydedildi.", len(synced))
+
     async def on_ready(self):
         logger.info(
             "Kaplumbik Discord'a bağlandı: %s (ID: %s)",

@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from app import create_app
 from app.database import db
 from app.database.advanced_models import Giveaway, GiveawayParticipant, PersonProfile
-from app.database.models import UserProfile
+from app.database.models import AuditLog, UserProfile
 from app.database.event_models import Event, EventParticipation
 from app.events.feature_service import get_setting
 
@@ -336,6 +336,18 @@ class MahzenCommands(commands.Cog):
                 giveaway.status = "ended"
                 giveaway.ended_at = datetime.now(timezone.utc)
                 title, prize, winner_id = giveaway.title, giveaway.prize, winner.discord_id
+                db.session.add(AuditLog(
+                    actor_discord_id=str(interaction.user.id),
+                    action="giveaway.end",
+                    target_type="giveaway",
+                    target_id=str(giveaway.id),
+                    details={
+                        "winner_discord_id": winner_id,
+                        "participant_count": len(entrants),
+                        "source": "discord_command",
+                    },
+                    success=True,
+                ))
                 db.session.commit()
             await interaction.response.send_message(
                 f"🎉 {title} çekilişi tamamlandı! Ödül: {prize} · Kazanan: <@{winner_id}>",

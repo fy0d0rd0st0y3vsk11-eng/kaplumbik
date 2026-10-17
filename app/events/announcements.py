@@ -48,30 +48,37 @@ class EventAnnouncementCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.command(name="etkinlikler")
-    async def upcoming_events(self, ctx: commands.Context):
-        """List upcoming scheduled events."""
-
+    @discord.app_commands.command(name="etkinlikler", description="Yaklaşan Mahzen etkinliklerini listeler.")
+    async def upcoming_events(self, interaction: discord.Interaction):
+        """List upcoming scheduled public events."""
         try:
             events = list_upcoming_events(limit=10)
-
             if not events:
-                await ctx.send(
-                    "📭 Yaklaşan etkinlik bulunmuyor."
-                )
+                await interaction.response.send_message("📭 Yaklaşan etkinlik bulunmuyor.")
                 return
 
-            for event in events:
-                await ctx.send(
-                    f"**Etkinlik #{event.id}**\n" + format_event(event) + f"\nKatılım butonları: `!etkinlik {event.id}`",
+            messages = [
+                f"**Etkinlik #{event.id}**\\n" + format_event(event)
+                + f"\\nKatılım butonları: `/etkinlik etkinlik_id:{event.id}`"
+                for event in events
+            ]
+            await interaction.response.send_message(
+                messages[0],
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            for message in messages[1:]:
+                await interaction.followup.send(
+                    message,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
-
         except Exception:
             logger.exception("Could not list upcoming events.")
-            await ctx.send(
-                "Etkinlikler yüklenirken bir hata oluştu."
-            )
+            error_message = "Etkinlikler yüklenirken bir hata oluştu."
+            if interaction.response.is_done():
+                await interaction.followup.send(error_message, ephemeral=True)
+            else:
+                await interaction.response.send_message(error_message, ephemeral=True)
+
 
 
 async def setup(bot: commands.Bot):

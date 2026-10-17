@@ -426,7 +426,8 @@ class AssistantFeatures(commands.Cog):
                 return
             going = [f"<@{r.discord_id}>" for r in rows if r.status == "going"]
             not_going = [f"<@{r.discord_id}>" for r in rows if r.status == "not_going"]
-            await interaction.followup.send(f"**{event.title}**\nKatılacağım ({len(going)}): {', '.join(going) or 'yok'}\nKatılmayacağım ({len(not_going)}): {', '.join(not_going) or 'yok'}", allowed_mentions=discord.AllowedMentions.none())
+            content = f"**{event.title}**\nKatılacağım ({len(going)}): {', '.join(going) or 'yok'}\nKatılmayacağım ({len(not_going)}): {', '.join(not_going) or 'yok'}"
+            await interaction.followup.send(content[:1900], allowed_mentions=discord.AllowedMentions.none())
 
 
 async def setup(bot: commands.Bot):

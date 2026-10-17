@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from flask import flash, redirect, render_template_string, request, session, url_for
 
 from app.database import db
-from app.database.advanced_models import AchievementDefinition, AnnouncementLog, BotSetting
+from app.database.advanced_models import AchievementDefinition, AnnouncementLog, BotSetting, PersonProfile
 from app.database.event_models import Event
 from app.database.models import AuditLog, UserProfile
 from app.events.feature_service import get_setting, set_setting, health_snapshot, seed_achievements
@@ -20,10 +20,10 @@ SETTINGS_PAGE = """
 <h1>🐢 Kaplumbik · Gelişmiş yönetim</h1><p class="muted">Bu sayfadaki ayarlar veritabanında saklanır. API anahtarlarını buraya yazma; gizli anahtarlar ortam değişkeni olarak tutulmalı.</p>
 <a href="{{ url_for('dashboard.index') }}">← Ana panele dön</a>
 <form method="post" action="{{ url_for('dashboard.advanced_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<section><h2>AI kişiliği ve tanıtım</h2><label>AI kişilik talimatı</label><textarea name="ai_personality" maxlength="6000">{{ values.ai_personality }}</textarea><label>Yeni üye tanıtım metni</label><textarea name="new_member_intro" maxlength="3000">{{ values.new_member_intro }}</textarea><label>Tasarımcı Discord kullanıcı ID'si</label><input name="designer_discord_id" pattern="[0-9]{15,25}" value="{{ values.designer_discord_id }}"><label>Çekiliş için gereken minimum puan</label><input name="giveaway_min_points" type="number" min="0" max="10000000" value="{{ values.giveaway_min_points }}"></section>
+<section><h2>AI kişiliği ve sunucu bilgisi</h2><label>AI kişilik talimatı</label><textarea name="ai_personality" maxlength="6000">{{ values.ai_personality }}</textarea><label>Kaplumbik'in sunucu hakkında bilmesi gerekenler</label><textarea name="server_knowledge" maxlength="6000" placeholder="Mahzen'in amacı, kanallar, oyunlar, kurallar ve botun görevleri...">{{ values.server_knowledge }}</textarea><p class="muted">Buraya yazdığın bilgiler AI cevaplarına bağlam olarak eklenir. Kişi tanıtımlarını aşağıdaki ayrı bölümden yönet.</p><label>Yeni üye karşılama metni</label><textarea name="new_member_intro" maxlength="3000">{{ values.new_member_intro }}</textarea><label>Tasarımcı Discord kullanıcı ID'si</label><input name="designer_discord_id" pattern="[0-9]{15,25}" value="{{ values.designer_discord_id }}"><label>Çekiliş için gereken minimum puan</label><input name="giveaway_min_points" type="number" min="0" max="10000000" value="{{ values.giveaway_min_points }}"></section>
 <section><h2>Oyun bağlantıları</h2><label>Minecraft Realms bağlantısı</label><input name="minecraft_realms_link" type="url" maxlength="500" value="{{ values.minecraft_realms_link }}"><label>Gartic Phone bağlantısı</label><input name="gartic_phone_link" type="url" maxlength="500" value="{{ values.gartic_phone_link }}"><label>Among Us oda kodu</label><input name="among_us_room_code" maxlength="100" value="{{ values.among_us_room_code }}"></section>
-<section><h2>Duyuru ve hatırlatmalar</h2><label>Duyuru kanalı ID'si</label><input name="announcement_channel_id" pattern="[0-9]{15,25}" value="{{ values.announcement_channel_id }}"><label>Etkinlik duyuru kanalı ID'si (boşsa üstteki kullanılır)</label><input name="game_announcement_channel_id" pattern="[0-9]{0,25}" value="{{ values.game_announcement_channel_id }}"><label>Günlük genel duyuru saatleri (Türkiye saati, virgülle; ör. 12:00,17:00,20:00)</label><input name="announcement_times" value="{{ values.announcement_times }}"><label>Başlangıçtan önce hatırlatma dakikaları (virgülle; ör. 15,5)</label><input name="game_reminder_minutes" value="{{ values.game_reminder_minutes }}"><label>Her duyuruda @everyone kullanılsın mı?</label><select name="announcement_everyone_ping"><option value="true" {% if values.announcement_everyone_ping == 'true' %}selected{% endif %}>Evet</option><option value="false" {% if values.announcement_everyone_ping != 'true' %}selected{% endif %}>Hayır</option></select><button type="submit">Ayarları kaydet</button></section></form>
-<section><h2>Başarımlar</h2><p class="muted">Koşul türü ve eşikler düzenlenebilir; profillerde uygun rozetler hesaplanır.</p>
+<section><h2>Duyuru ve hatırlatmalar</h2><label>Duyuru kanalı ID'si</label><input name="announcement_channel_id" pattern="[0-9]{15,25}" value="{{ values.announcement_channel_id }}"><label>Etkinlik duyuru kanalı ID'si (boşsa üstteki kullanılır)</label><input name="game_announcement_channel_id" pattern="[0-9]{0,25}" value="{{ values.game_announcement_channel_id }}"><label>Günlük hatırlatma metni (bot bunu aynen gönderir)</label><textarea name="daily_announcement_text" maxlength="1800">{{ values.daily_announcement_text }}</textarea><p class="muted">Metni boş bırakırsan günlük genel hatırlatma gönderilmez. Bot bu metni kendi cümleleriyle yeniden yazmaz.</p><label>Günlük genel duyuru saatleri (Türkiye saati, virgülle; ör. 12:00,17:00,20:00)</label><input name="announcement_times" value="{{ values.announcement_times }}"><label>Başlangıçtan önce hatırlatma dakikaları (virgülle; ör. 15,5)</label><input name="game_reminder_minutes" value="{{ values.game_reminder_minutes }}"><label>Her duyuruda @everyone kullanılsın mı?</label><select name="announcement_everyone_ping"><option value="true" {% if values.announcement_everyone_ping == 'true' %}selected{% endif %}>Evet</option><option value="false" {% if values.announcement_everyone_ping != 'true' %}selected{% endif %}>Hayır</option></select><button type="submit">Ayarları kaydet</button></section></form>
+<section><h2>👥 Kişi tanıtımları</h2><p class="muted">Sol tarafa kişinin adını, sağ tarafa onun hakkında üyelerle paylaşılmasını istediğin bilgileri yaz. Kaplumbik bu kayıtları sorulduğunda kullanır; kayıt yoksa uydurmaması gerekir. Gizli veya paylaşılmaması gereken özel bilgileri ekleme.</p><form method="post" action="{{ url_for('dashboard.person_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="grid"><div><label>Kişinin adı</label><input name="name" maxlength="100" required placeholder="Örn. Fedya"></div><div><label>Kişi hakkında bilgi</label><textarea name="info" maxlength="4000" required placeholder="İlgi alanları, sunucudaki rolü, kendisinin paylaşılmasını istediği bilgiler..."></textarea></div></div><button type="submit">Kişiyi kaydet</button></form><table><tr><th>Kişi</th><th>Bilgiler</th><th>İşlem</th></tr>{% for person in people %}<tr><td>{{ person.name }}</td><td style="white-space:pre-wrap">{{ person.info }}</td><td><form method="post" action="{{ url_for('dashboard.person_delete', person_id=person.id) }}" onsubmit="return confirm('Bu kişi tanıtımını silmek istiyor musun?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Sil</button></form></td></tr>{% else %}<tr><td colspan="3">Henüz kişi tanıtımı eklenmedi.</td></tr>{% endfor %}</table></section><section><h2>Başarımlar</h2><p class="muted">Koşul türü ve eşikler düzenlenebilir; profillerde uygun rozetler hesaplanır.</p>
 {% for item in achievements %}<form method="post" action="{{ url_for('dashboard.achievement_save', achievement_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><strong>{{ item.key }}</strong><div class="grid"><div><label>Başlık</label><input name="title" maxlength="100" value="{{ item.title }}" required></div><div><label>Koşul türü</label><select name="condition_type">{% for kind in ['events_attended','unique_games','comeback_days','points'] %}<option value="{{ kind }}" {% if item.condition_type == kind %}selected{% endif %}>{{ kind }}</option>{% endfor %}</select></div><div><label>Eşik</label><input name="threshold" type="number" min="1" max="100000" value="{{ item.threshold }}" required></div></div><label>Açıklama</label><input name="description" maxlength="300" value="{{ item.description }}"><label><input style="width:auto" type="checkbox" name="enabled" {% if item.enabled %}checked{% endif %}> Etkin</label><button type="submit">Başarımı kaydet</button></form>{% endfor %}</section>
 <section><h2>Üye arama ve puan bakiyesi</h2><form method="get" action="{{ url_for('dashboard.advanced_index') }}"><label>Discord ID veya kullanıcı adı</label><input name="member_q" value="{{ member_q }}" placeholder="ID ya da kullanıcı adı"><button type="submit">Ara</button></form><table><tr><th>Üye</th><th>Discord ID</th><th>Puan</th><th>Etkinlik puanı</th><th>Seviye</th></tr>{% for member in members %}<tr><td>{{ member.username or 'İsimsiz üye' }}</td><td>{{ member.discord_id }}</td><td>{{ member.balance }}</td><td>{{ member.total_event_points }}</td><td>{{ member.level }}</td></tr>{% else %}<tr><td colspan="5">Aramayla eşleşen üye yok.</td></tr>{% endfor %}</table></section>
 <section><h2>İptal edilmiş etkinlikler</h2><p class="muted">Gelecekteki etkinlikler buradan geri alınabilir; geçmiş etkinlikler yeniden planlanmaz.</p>{% for event in cancelled_events %}<form method="post" action="{{ url_for('dashboard.restore_event', event_id=event.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><strong>#{{ event.id }} · {{ event.title }}</strong> — {{ event.starts_at.strftime('%d.%m.%Y %H:%M') }}<button type="submit">Etkinliği geri yükle</button></form>{% else %}<p>Geri yüklenecek iptal edilmiş etkinlik yok.</p>{% endfor %}</section>
@@ -34,7 +34,7 @@ SETTINGS_PAGE = """
 """
 
 SETTING_KEYS = (
-    "ai_personality", "new_member_intro", "designer_discord_id",
+    "ai_personality", "server_knowledge", "daily_announcement_text", "new_member_intro", "designer_discord_id",
     "giveaway_min_points", "minecraft_realms_link", "gartic_phone_link",
     "among_us_room_code", "announcement_channel_id", "game_announcement_channel_id",
     "announcement_times", "game_reminder_minutes", "announcement_everyone_ping",
@@ -48,6 +48,9 @@ def advanced_index():
     values = {key: get_setting(key) for key in SETTING_KEYS}
     values["announcement_times"] = get_setting("announcement_times", "12:00,17:00,20:00")
     values["game_reminder_minutes"] = get_setting("game_reminder_minutes", "15,5")
+    values["daily_announcement_text"] = get_setting("daily_announcement_text", "")
+    values["server_knowledge"] = get_setting("server_knowledge", "")
+    people = db.session.query(PersonProfile).order_by(PersonProfile.name.asc()).limit(200).all()
     achievements = db.session.query(AchievementDefinition).order_by(AchievementDefinition.id).all()
     health = health_snapshot(30)
     audit_logs = db.session.query(AuditLog).order_by(AuditLog.id.desc()).limit(50).all()
@@ -59,7 +62,7 @@ def advanced_index():
         from sqlalchemy import or_
         member_query = member_query.filter(or_(UserProfile.discord_id == member_q, UserProfile.username.ilike(f"%{member_q}%")))
     members = member_query.order_by(UserProfile.balance.desc()).limit(100).all()
-    return render_template_string(SETTINGS_PAGE, values=values, achievements=achievements, health=health, audit_logs=audit_logs, announcement_logs=announcement_logs, cancelled_events=cancelled_events, members=members, member_q=member_q, csrf_token=session.get("csrf_token", ""))
+    return render_template_string(SETTINGS_PAGE, values=values, people=people, achievements=achievements, health=health, audit_logs=audit_logs, announcement_logs=announcement_logs, cancelled_events=cancelled_events, members=members, member_q=member_q, csrf_token=session.get("csrf_token", ""))
 
 
 @dashboard_bp.post("/advanced/save")
@@ -77,6 +80,8 @@ def advanced_save():
         if minimum < 0 or minimum > 10_000_000:
             raise ValueError("Çekiliş puan eşiği 0–10.000.000 arasında olmalı.")
         values["giveaway_min_points"] = str(minimum)
+        if len(values["daily_announcement_text"]) > 1800:
+            raise ValueError("Günlük hatırlatma metni en fazla 1800 karakter olabilir.")
         times = [part.strip() for part in request.form.get("announcement_times", "12:00,17:00,20:00").split(",") if part.strip()]
         for item in times:
             datetime.strptime(item, "%H:%M")
@@ -100,6 +105,61 @@ def advanced_save():
         db.session.rollback()
         logger.exception("Could not save advanced settings")
         flash(f"Ayarlar kaydedilemedi: {str(exc)[:180]}")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/people")
+@owner_required
+def person_save():
+    _require_csrf()
+    name = request.form.get("name", "").strip()
+    info = request.form.get("info", "").strip()
+    if not name or not info:
+        flash("Kişinin adı ve hakkında bilgi alanları boş bırakılamaz.")
+        return redirect(url_for("dashboard.advanced_index"))
+    if len(name) > 100 or len(info) > 4000:
+        flash("Kişi adı en fazla 100, bilgi metni en fazla 4000 karakter olabilir.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        person = PersonProfile(name=name, info=info)
+        db.session.add(person)
+        db.session.flush()
+        db.session.add(AuditLog(
+            actor_discord_id=str(session["discord_id"]),
+            action="person.create", target_type="person_profile", target_id=str(person.id),
+            details={"name": name}, success=True,
+        ))
+        db.session.commit()
+        flash(f"{name} için kişi tanıtımı kaydedildi.")
+    except Exception as exc:
+        db.session.rollback()
+        logger.exception("Could not save person profile")
+        flash("Kişi kaydedilemedi. Veritabanı hatasını kontrol et.")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/people/<int:person_id>/delete")
+@owner_required
+def person_delete(person_id):
+    _require_csrf()
+    person = db.session.get(PersonProfile, person_id)
+    if person is None:
+        flash("Bu kişi tanıtımı zaten bulunmuyor.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        name = person.name
+        db.session.add(AuditLog(
+            actor_discord_id=str(session["discord_id"]),
+            action="person.delete", target_type="person_profile", target_id=str(person.id),
+            details={"name": name}, success=True,
+        ))
+        db.session.delete(person)
+        db.session.commit()
+        flash(f"{name} için kişi tanıtımı silindi.")
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not delete person profile")
+        flash("Kişi tanıtımı silinemedi.")
     return redirect(url_for("dashboard.advanced_index"))
 
 

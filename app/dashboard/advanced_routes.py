@@ -92,7 +92,7 @@ button,.button,a.button{display:inline-flex;align-items:center;justify-content:c
     if(last){
       const submitted=forms.find(f=>keyFor(f)===last);
       const successMessages=[...document.querySelectorAll(".flash")].map(el=>el.textContent||"");
-      const savedSuccessfully=successMessages.some(message=>/(kaydedildi|güncellendi|silindi|bitti)/i.test(message));
+      const savedSuccessfully=successMessages.some(message=>/(oluşturuldu|kaydedildi|güncellendi|silindi|bitti|iptal edildi|geri yüklendi|kuyruğa alındı|oturum kapatıldı)/i.test(message));
       if(submitted&&savedSuccessfully){try{localStorage.removeItem(keyFor(submitted));}catch(e){}dirty.delete(submitted);}
       localStorage.removeItem("kaplumbik-last-submit");
     }

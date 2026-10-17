@@ -91,7 +91,9 @@ button,.button,a.button{display:inline-flex;align-items:center;justify-content:c
     const last=localStorage.getItem("kaplumbik-last-submit");
     if(last){
       const submitted=forms.find(f=>keyFor(f)===last);
-      if(submitted){try{localStorage.removeItem(keyFor(submitted));}catch(e){}dirty.delete(submitted);}
+      const successMessages=[...document.querySelectorAll(".flash")].map(el=>el.textContent||"");
+      const savedSuccessfully=successMessages.some(message=>/(kaydedildi|güncellendi|silindi|bitti\\.)/i.test(message));
+      if(submitted&&savedSuccessfully){try{localStorage.removeItem(keyFor(submitted));}catch(e){}dirty.delete(submitted);}
       localStorage.removeItem("kaplumbik-last-submit");
     }
   }catch(e){}

@@ -207,3 +207,53 @@ def test_daily_announcement_slot_allows_short_retries():
     assert scheduler._due_daily_slot(moment.replace(minute=5), "12:00,17:00") is None
     assert scheduler._due_daily_slot(moment.replace(minute=3), "12:00,12:03") == "12:03"
     assert scheduler._due_daily_slot(moment.replace(minute=2), "bad,12:00") == "12:00"
+
+def test_kaplumbik_meme_triggers_are_deterministic():
+    assert assistant_features._is_swearing("bu ne amk")
+    assert assistant_features._is_swearing("what the fuck")
+    assert assistant_features._is_swearing("siktir git")
+    assert not assistant_features._is_swearing("Amınake meme'i")
+    assert assistant_features._mentions_ruyar("Ruyar hakkında konuşuyorum")
+    assert assistant_features._mentions_ruyar("RUYİŞ pro")
+    assert not assistant_features._mentions_ruyar("ruyap hakkında")
+
+
+def test_conversation_memory_persists_and_isolates_members(assistant_app, monkeypatch):
+    from app.database.advanced_models import ConversationMemory
+
+    monkeypatch.setattr(assistant_features, "create_app", lambda: assistant_app)
+    assistant_features._save_conversation_memory(
+        "guild-1", "channel-1", "member-1", "Fedya", "user", "Dün Among Us oynadık."
+    )
+    assistant_features._save_conversation_memory(
+        "guild-1", "channel-1", "member-1", "Kaplumbik", "assistant", "PUAHAHAHA evet."
+    )
+    assistant_features._save_conversation_memory(
+        "guild-1", "channel-1", "member-2", "Başka üye", "user", "Bu başka üyeye ait."
+    )
+    assistant_features._save_conversation_memory(
+        "guild-2", "channel-2", "member-1", "Fedya", "user", "Bu başka sunucuya ait."
+    )
+
+    history = assistant_features._load_conversation_memory("guild-1", "member-1", "Among Us")
+    assert "Dün Among Us oynadık." in history
+    assert "PUAHAHAHA evet." in history
+    assert "Bu başka üyeye ait." not in history
+    assert "Bu başka sunucuya ait." not in history
+
+    with assistant_app.app_context():
+        assert ConversationMemory.query.count() == 4
+
+
+def test_conversation_memory_ignores_empty_and_truncates_long_messages(assistant_app, monkeypatch):
+    from app.database.advanced_models import ConversationMemory
+
+    monkeypatch.setattr(assistant_features, "create_app", lambda: assistant_app)
+    assistant_features._save_conversation_memory("guild-1", "channel-1", "member-1", "Fedya", "user", "   ")
+    assistant_features._save_conversation_memory(
+        "guild-1", "channel-1", "member-1", "Fedya", "user", "x" * 4000
+    )
+    with assistant_app.app_context():
+        row = ConversationMemory.query.one()
+        assert len(row.content) == 3000
+

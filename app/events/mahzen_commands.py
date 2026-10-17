@@ -13,6 +13,7 @@ from app import create_app
 from app.database import db
 from app.database.advanced_models import Giveaway, GiveawayParticipant, PersonProfile
 from app.database.models import UserProfile
+from app.database.event_models import Event, EventParticipation
 from app.events.feature_service import get_setting
 
 logger = logging.getLogger("kaplumbik.mahzen_commands")
@@ -331,6 +332,77 @@ class MahzenCommands(commands.Cog):
         await interaction.response.send_message(
             "\n\n".join(sections)[:3900],
             ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @app_commands.command(name="oyunlar", description="Mahzen'de ayarlanmış oyun bağlantılarını ve oda bilgilerini göster.")
+    async def game_links(self, interaction: discord.Interaction):
+        app = create_app()
+        with app.app_context():
+            rows = [
+                ("Minecraft Realms", get_setting("minecraft_realms_link", "")),
+                ("Gartic Phone", get_setting("gartic_phone_link", "")),
+                ("Among Us oda kodu", get_setting("among_us_room_code", "")),
+            ]
+        lines = [f"**{label}:** {discord.utils.escape_mentions(value)}" for label, value in rows if (value or "").strip()]
+        await interaction.response.send_message(
+            "\n".join(lines) if lines else "Oyun bağlantıları henüz dashboard'a eklenmemiş.",
+            ephemeral=True,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+    @app_commands.command(name="etkinlikbilgi", description="Bir Mahzen etkinliğinin saatini, oyununu ve katılım sayılarını göster.")
+    async def event_info(self, interaction: discord.Interaction, etkinlik_id: int):
+        app = create_app()
+        with app.app_context():
+            event = db.session.get(Event, etkinlik_id)
+            if event is None:
+                data = None
+            else:
+                rows = db.session.execute(
+                    select(EventParticipation).where(EventParticipation.event_id == event.id)
+                ).scalars().all()
+                data = {
+                    "id": event.id,
+                    "title": event.title,
+                    "game": event.game,
+                    "description": event.description or "",
+                    "starts_at": _aware(event.starts_at),
+                    "status": event.status,
+                    "going": sum(row.status == "going" for row in rows),
+                    "not_going": sum(row.status == "not_going" for row in rows),
+                    "attended": sum(row.status == "attended" for row in rows),
+                }
+        if data is None:
+            await interaction.response.send_message("Bu etkinliği bulamadım.", ephemeral=True)
+            return
+        when = f"<t:{int(data['starts_at'].timestamp())}:F>" if data["starts_at"] else "Belirtilmemiş"
+        embed = discord.Embed(
+            title=f"🎮 Etkinlik #{data['id']} · {data['title'][:200]}",
+            description=data["description"][:3000] or "Ek açıklama yok.",
+            color=discord.Color.from_rgb(166, 143, 255),
+        )
+        embed.add_field(name="Oyun", value=data["game"][:200], inline=True)
+        embed.add_field(name="Başlangıç", value=when, inline=False)
+        embed.add_field(name="Durum", value=data["status"], inline=True)
+        embed.add_field(name="Katılacağım", value=str(data["going"]), inline=True)
+        embed.add_field(name="Katılmayacağım", value=str(data["not_going"]), inline=True)
+        embed.add_field(name="Katıldığı onaylandı", value=str(data["attended"]), inline=True)
+        await interaction.response.send_message(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+
+    @app_commands.command(name="cekilisarsiv", description="Sonuçlanmış Mahzen çekilişlerini ve kazananlarını göster.")
+    async def giveaway_archive(self, interaction: discord.Interaction):
+        app = create_app()
+        with app.app_context():
+            rows = db.session.execute(
+                select(Giveaway).where(Giveaway.status == "ended").order_by(Giveaway.ended_at.desc()).limit(10)
+            ).scalars().all()
+            lines = [
+                f"**#{row.id} · {discord.utils.escape_markdown(row.title)}** — ödül: {discord.utils.escape_markdown(row.prize)} — kazanan: <@{row.winner_discord_id}>"
+                for row in rows
+            ]
+        await interaction.response.send_message(
+            "\n".join(lines)[:1900] if lines else "Henüz sonuçlanmış çekiliş yok.",
             allowed_mentions=discord.AllowedMentions.none(),
         )
 

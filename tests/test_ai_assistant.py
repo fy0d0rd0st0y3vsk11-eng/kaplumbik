@@ -144,3 +144,11 @@ def test_configured_event_reminder_minutes_are_respected():
     assert scheduler._reminder_kind(15 * 60, [15, 5]) == "reminder_15m"
     assert scheduler._reminder_kind(5 * 60, [15, 5]) == "reminder_5m"
     assert scheduler._reminder_kind(10 * 60, [15, 5]) is None
+
+
+def test_default_event_template_contains_actual_line_breaks():
+    from app.events.feature_service import DEFAULT_SETTINGS
+
+    template = DEFAULT_SETTINGS["event_announcement_template"]
+    assert "\n" in template
+    assert r"\n" not in template

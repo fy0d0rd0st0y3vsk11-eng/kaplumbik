@@ -36,6 +36,14 @@ from app.events.service import (
 from . import dashboard_bp
 
 logger = logging.getLogger("kaplumbik.dashboard")
+
+
+def _local_time(value, fmt="%d.%m.%Y %H:%M"):
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(ZoneInfo("Europe/Istanbul")).strftime(fmt)
 oauth = OAuth()
 discord_oauth = oauth.register(
     name="discord",
@@ -100,7 +108,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 <section class="panel"><h2>Etkinlikler</h2>
 {% if events %}{% for event in events %}
 <div class="event"><strong>#{{ event.id }} · {{ event.title }}</strong> <span class="tag">{{ event.status }}</span>
-<div class="muted">{{ event.game }} · {{ event.starts_at.strftime('%d.%m.%Y %H:%M') }} UTC</div>
+<div class="muted">{{ event.game }} · {{ local_time(event.starts_at) }} Türkiye saati</div>
 {% if event.description %}<p>{{ event.description }}</p>{% endif %}
 {% if event.game_link %}<p><a href="{{ event.game_link }}" rel="noopener noreferrer" target="_blank">Oyun bağlantısı</a></p>{% endif %}
 <div class="muted">Katılım kayıtları: {{ event.participations|length }}</div>
@@ -123,14 +131,14 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 <button type="submit">Ara</button> {% if member_query %}<a href="{{ url_for('dashboard.index') }}">Temizle</a>{% endif %}
 </form>
 <div class="table-wrap"><table><thead><tr><th>Kullanıcı</th><th>Discord ID</th><th>Bakiye</th><th>Etkinlik puanı</th><th>Seviye</th><th>Son etkinlik</th></tr></thead><tbody>
-{% for member in members %}<tr><td>{{ member.username or 'İsimsiz üye' }}</td><td>{{ member.discord_id }}</td><td>{{ member.balance }}</td><td>{{ member.total_event_points }}</td><td>{{ member.level }}</td><td>{{ member.last_event_at.strftime('%d.%m.%Y') if member.last_event_at else '—' }}</td></tr>{% else %}<tr><td colspan="6">Üye bulunamadı.</td></tr>{% endfor %}
+{% for member in members %}<tr><td>{{ member.username or 'İsimsiz üye' }}</td><td>{{ member.discord_id }}</td><td>{{ member.balance }}</td><td>{{ member.total_event_points }}</td><td>{{ member.level }}</td><td>{{ local_time(member.last_event_at, '%d.%m.%Y') if member.last_event_at else '—' }}</td></tr>{% else %}<tr><td colspan="6">Üye bulunamadı.</td></tr>{% endfor %}
 </tbody></table></div></section>
 <div class="grid">
 <section class="panel"><h2>Son puan hareketleri</h2><div class="table-wrap"><table><thead><tr><th>Üye ID</th><th>Miktar</th><th>Açıklama</th><th>Tarih</th></tr></thead><tbody>
-{% for tx in transactions %}<tr><td>{{ tx.user.discord_id if tx.user else tx.user_id }}</td><td>{{ '+' if tx.amount > 0 else '' }}{{ tx.amount }}</td><td>{{ tx.description }}</td><td>{{ tx.created_at.strftime('%d.%m %H:%M') }}</td></tr>{% else %}<tr><td colspan="4">Kayıt yok.</td></tr>{% endfor %}
+{% for tx in transactions %}<tr><td>{{ tx.user.discord_id if tx.user else tx.user_id }}</td><td>{{ '+' if tx.amount > 0 else '' }}{{ tx.amount }}</td><td>{{ tx.description }}</td><td>{{ local_time(tx.created_at, '%d.%m %H:%M') }}</td></tr>{% else %}<tr><td colspan="4">Kayıt yok.</td></tr>{% endfor %}
 </tbody></table></div></section>
 <section class="panel"><h2>Denetim geçmişi</h2><div class="table-wrap"><table><thead><tr><th>İşlem</th><th>Yetkili</th><th>Hedef</th><th>Tarih</th></tr></thead><tbody>
-{% for item in audit_logs %}<tr><td>{{ item.action }}</td><td>{{ item.actor_discord_id or '—' }}</td><td>{{ item.target_id or '—' }}</td><td>{{ item.created_at.strftime('%d.%m %H:%M') }}</td></tr>{% else %}<tr><td colspan="4">Kayıt yok.</td></tr>{% endfor %}
+{% for item in audit_logs %}<tr><td>{{ item.action }}</td><td>{{ item.actor_discord_id or '—' }}</td><td>{{ item.target_id or '—' }}</td><td>{{ local_time(item.created_at, '%d.%m %H:%M') }}</td></tr>{% else %}<tr><td colspan="4">Kayıt yok.</td></tr>{% endfor %}
 </tbody></table></div></section>
 </div>
 {% endif %}
@@ -176,7 +184,7 @@ def index():
     if not logged_in:
         return render_template_string(
             PAGE, title="Giriş", logged_in=False, username="", csrf_token="",
-            stats={}, events=[], transactions=[], audit_logs=[]
+            stats={}, events=[], transactions=[], audit_logs=[], local_time=_local_time
         )
 
     owner_id = str(settings.owner_discord_id or "").strip()
@@ -214,7 +222,7 @@ def index():
         username=session.get("username", "Yönetici"),
         csrf_token=_csrf_token(), stats=stats, events=events,
         transactions=transactions, audit_logs=audit_logs,
-        members=members, member_query=member_query
+        members=members, member_query=member_query, local_time=_local_time
     )
 
 

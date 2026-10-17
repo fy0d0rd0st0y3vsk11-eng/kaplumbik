@@ -10,6 +10,19 @@ Kaplumbik, Mahzen Discord sunucusu için etkinlik, katılım ve puan yönetimi a
 - Etkinlik ve katılım modelleri: `app/database/event_models.py`
 - Puan ve işlem kayıtları: `app/database/models.py`
 
+## Slash komutları
+
+Bot açılırken Discord komutlarını otomatik senkronize eder:
+
+- `/etkinlikler` — yaklaşan etkinlikleri listeler
+- `/etkinlik` — etkinlik ayrıntılarını ve katılım butonlarını gösterir
+- `/kimtasarladi` — Kaplumbik tasarımcısını gösterir
+- `/tanit` — seçilen üyeye Mahzen tanıtımını gösterir
+- `/profil` — üye profili, puan ve rozetleri gösterir
+- `/etkinlikgecmisi` — etkinlik katılım geçmişini gösterir
+
+Komutları test sunucusunda hemen görünür yapmak için ortam değişkeni olarak `DISCORD_GUILD_ID` ekleyin. Bu değer boşsa komutlar global olarak senkronize edilir; Discord'un tüm sunuculara yayması biraz zaman alabilir.
+
 ## Yerel çalıştırma
 
 1. Python 3.11 veya üzeri kurun.

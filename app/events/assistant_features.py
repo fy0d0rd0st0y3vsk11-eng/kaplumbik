@@ -93,7 +93,7 @@ def _load_conversation_memory(guild_id: str, discord_id: str, query_text: str = 
 
 def _is_swearing(text: str) -> bool:
     patterns = (
-        r"\bamk\b", r"\baq\b", r"\bamina\w*", r"\bamına\w*",
+        r"\bamk\b", r"\baq\b", r"\bamina\s*(?:koy|sik|sic|sıç)\w*", r"\bamına\s*(?:koy|sik|sic|sıç)\w*",
         r"\borospu\w*", r"\bpiç\b", r"\bpic\b", r"\byarrak\w*",
         r"\bsik\w*", r"\bfuck\w*", r"\bshit\b", r"\bbitch\w*",
         r"\basshole\b", r"\bmotherfucker\w*", r"\bdamn\b",
@@ -380,16 +380,16 @@ class AssistantFeatures(commands.Cog):
                 memory = await asyncio.to_thread(_load_conversation_memory, guild_id, member_id, prompt_text)
                 await asyncio.to_thread(_save_conversation_memory, guild_id, channel_id, member_id, author_name, "user", prompt_text)
                 if memory:
-                    knowledge = (knowledge + "\\n\\nBU ÜYEYLE ÖNCEKİ SOHBETLER (önceki kayıtlar; güncel mesaj en önemlisidir):\\n" + memory).strip()
+                    knowledge = (knowledge + "\n\nBU ÜYEYLE ÖNCEKİ SOHBETLER (önceki kayıtlar; güncel mesaj en önemlisidir):\n" + memory).strip()
                 contextual_prompt = (
-                    f"Mesajı yazan kişi: {author_name} (Discord ID: {member_id})\\n"
-                    f"Ortam: {guild_name} (sunucu kimliği: {guild_id})\\n"
-                    f"{guild_context}\\n"
+                    f"Mesajı yazan kişi: {author_name} (Discord ID: {member_id})\n"
+                    f"Ortam: {guild_name} (sunucu kimliği: {guild_id})\n"
+                    f"{guild_context}\n"
                     f"Kullanıcının mesajı: {prompt_text}"
                 )
                 async with message.channel.typing():
                     answer = await asyncio.to_thread(_ai_request, contextual_prompt, personality, knowledge)
-                answer = re.sub(r"\\bo\\s+sırada\\b", "Osssurada", answer, flags=re.IGNORECASE)
+                answer = re.sub(r"\bo\s+sırada\b", "Osssurada", answer, flags=re.IGNORECASE)
                 await asyncio.to_thread(_save_conversation_memory, guild_id, channel_id, member_id, "Kaplumbik", "assistant", answer)
                 await message.reply(answer, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
                 await asyncio.to_thread(_health, "ai", "ok", "AI yanıtı üretildi.")

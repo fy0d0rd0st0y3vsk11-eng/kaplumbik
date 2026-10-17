@@ -45,6 +45,9 @@ class KaplumbikBot(commands.Bot):
         await self.load_extension("app.events.assistant_features")
         logger.info("AI, profil ve oyun bağlantısı özellikleri yüklendi.")
 
+        await self.load_extension("app.events.mahzen_commands")
+        logger.info("Mahzen kişi tanıtımı ve çekiliş komutları yüklendi.")
+
         await self.load_extension("app.events.scheduler")
         logger.info("Zamanlanmış duyuru sistemi yüklendi.")
 

@@ -103,3 +103,21 @@ class GiveawayParticipant(db.Model):
     __table_args__ = (
         db.UniqueConstraint("giveaway_id", "discord_id", name="uq_mahzen_giveaway_member"),
     )
+
+class ConversationMemory(db.Model):
+    """Persistent, per-member conversation history for direct Kaplumbik chats."""
+    __tablename__ = "conversation_memories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    guild_id = db.Column(db.String(25), nullable=False, index=True)
+    discord_id = db.Column(db.String(25), nullable=False, index=True)
+    channel_id = db.Column(db.String(25), nullable=True)
+    display_name = db.Column(db.String(100), nullable=False, default="")
+    role = db.Column(db.String(12), nullable=False)  # user or assistant
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
+
+    __table_args__ = (
+        db.Index("ix_conversation_member_time", "guild_id", "discord_id", "created_at"),
+    )
+

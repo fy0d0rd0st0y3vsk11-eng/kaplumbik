@@ -58,8 +58,8 @@ class EventAnnouncementCog(commands.Cog):
                 return
 
             messages = [
-                f"**Etkinlik #{event.id}**\\n" + format_event(event)
-                + f"\\nKatılım butonları: `/etkinlik etkinlik_id:{event.id}`"
+                f"**Etkinlik #{event.id}**\n" + format_event(event)
+                + f"\nKatılım butonları: `/etkinlik etkinlik_id:{event.id}`"
                 for event in events
             ]
             await interaction.response.send_message(

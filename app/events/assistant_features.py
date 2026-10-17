@@ -343,7 +343,7 @@ class AssistantFeatures(commands.Cog):
         with app.app_context():
             from sqlalchemy import select
             people = db.session.execute(
-                select(PersonProfile).order_by(PersonProfile.name.asc()).limit(25)
+                select(PersonProfile).order_by(PersonProfile.name.asc()).limit(1000)
             ).scalars().all()
         if not people:
             await interaction.response.send_message(

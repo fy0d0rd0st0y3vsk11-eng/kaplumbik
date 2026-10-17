@@ -201,8 +201,12 @@ class EventScheduler(commands.Cog):
             exists = db.session.execute(select(AnnouncementLog.id).where(AnnouncementLog.kind == kind, AnnouncementLog.success.is_(True)).limit(1)).first()
             if exists:
                 return
+        # Send the owner's exact dashboard-written text; never let AI rewrite announcements.
+        custom_text = (await asyncio.to_thread(_read_setting, "daily_announcement_text", "")).strip()
+        if not custom_text:
+            return
         ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"
-        text = ("@everyone\n" if ping else "") + "🎮 Mahzen oyun hatırlatması! Bugün oyuna katılmak istiyorsan etkinliklere göz at ve katılımını bildir: /etkinlikler"
+        text = ("@everyone\n" if ping else "") + custom_text
         try:
             await channel.send(text, allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
             app = create_app()

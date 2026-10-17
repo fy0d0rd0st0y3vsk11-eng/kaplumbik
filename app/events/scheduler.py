@@ -46,6 +46,35 @@ def _log_delivery(event_id, channel_id, kind, message, success, error=""):
     db.session.commit()
 
 
+def _event_announcement_message(event):
+    """Use the owner's template verbatim, replacing only documented placeholders."""
+    template = (_read_setting("event_announcement_template", "") or "").strip()
+    if not template:
+        return format_event(event) + "\n\nKatılımını aşağıdaki butonlardan bildir."
+
+    starts_at = event.starts_at
+    if starts_at.tzinfo is None:
+        starts_at = starts_at.replace(tzinfo=timezone.utc)
+    local_start = starts_at.astimezone(TR)
+
+    def safe(value):
+        return discord.utils.escape_mentions(str(value or ""))
+
+    values = {
+        "title": safe(event.title),
+        "game": safe(event.game),
+        "time": local_start.strftime("%d.%m.%Y %H:%M"),
+        "description": safe(event.description),
+        "link": safe(event.game_link),
+        "room_code": safe(event.room_code if "among us" in (event.game or "").casefold() else ""),
+    }
+    message = template
+    for key, value in values.items():
+        message = message.replace("{" + key + "}", value)
+    message = "\n".join(line for line in message.splitlines() if line.strip())
+    return message[:1850]
+
+
 class EventScheduler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -133,7 +162,7 @@ class EventScheduler(commands.Cog):
                     event.room_code = await asyncio.to_thread(_read_setting, "among_us_room_code")
                 ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"
                 prefix = "@everyone\n" if ping else ""
-                message = prefix + format_event(event) + "\n\nKatılımını seçmek için aşağıdaki butonları kullan."
+                message = prefix + _event_announcement_message(event)
                 try:
                     await channel.send(message, view=EventRSVPView(event.id), allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
                     app = create_app()
@@ -173,7 +202,7 @@ class EventScheduler(commands.Cog):
         if not event.room_code and "among us" in game_name:
             event.room_code = await asyncio.to_thread(_read_setting, "among_us_room_code")
         ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"
-        message = ("@everyone\n" if ping else "") + format_event(event) + "\n\nKatılımını seçmek için aşağıdaki butonları kullan."
+        message = ("@everyone\n" if ping else "") + _event_announcement_message(event)
         kind = f"manual_resend:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
         try:
             await channel.send(message, view=EventRSVPView(event.id), allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))

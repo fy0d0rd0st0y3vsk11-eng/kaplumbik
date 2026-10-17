@@ -3,6 +3,8 @@ import secrets
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
+
 from flask import flash, redirect, render_template_string, request, session, url_for
 
 from app.database import db
@@ -340,7 +342,7 @@ def giveaway_save():
 @owner_required
 def giveaway_end(giveaway_id):
     _require_csrf()
-    giveaway = db.session.execute(db.select(Giveaway).where(Giveaway.id == giveaway_id).with_for_update()).scalar_one_or_none()
+    giveaway = db.session.execute(select(Giveaway).where(Giveaway.id == giveaway_id).with_for_update()).scalar_one_or_none()
     if giveaway is None:
         flash("Çekiliş bulunamadı.")
         return redirect(url_for("dashboard.advanced_index"))

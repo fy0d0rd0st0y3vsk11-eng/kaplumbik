@@ -22,10 +22,14 @@ DEFAULT_SETTINGS = {
     "giveaway_min_points": "100",
 }
 
+LEGACY_DAILY_ANNOUNCEMENT = "🎮 Mahzen oyun hatırlatması! Bugün oyuna katılmak istiyorsan etkinliklere göz at ve katılımını bildir: /etkinlikler"
+
 
 def get_setting(key, default=""):
     row = db.session.get(BotSetting, key)
     if row:
+        if key == "daily_announcement_text" and row.value == LEGACY_DAILY_ANNOUNCEMENT:
+            return ""
         return row.value
     return DEFAULT_SETTINGS.get(key, default)
 

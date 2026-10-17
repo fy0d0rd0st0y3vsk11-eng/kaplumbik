@@ -46,7 +46,59 @@ button,.button,a.button{display:inline-flex;align-items:center;justify-content:c
 <section><h2>Son duyuru kayıtları</h2><table><tr><th>Etkinlik</th><th>Tür</th><th>Durum</th><th>Hata</th><th>Zaman</th></tr>{% for log in announcement_logs %}<tr><td>{{ log.event_id or 'Genel' }}</td><td>{{ log.kind }}</td><td>{{ 'Başarılı' if log.success else 'Hata' }}</td><td>{{ log.error or '' }}</td><td>{{ log.sent_at.strftime('%d.%m %H:%M:%S') }}{% if log.event_id %}<form method="post" action="{{ url_for('dashboard.resend_announcement', log_id=log.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Yeniden gönder</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="5">Henüz duyuru kaydı yok.</td></tr>{% endfor %}</table></section>
 <section><h2>Yönetici işlem kayıtları</h2><table><tr><th>Yönetici</th><th>İşlem</th><th>Hedef</th><th>Başarılı</th><th>Zaman</th></tr>{% for row in audit_logs %}<tr><td>{{ row.actor_discord_id }}</td><td>{{ row.action }}</td><td>{{ row.target_type }} · {{ row.target_id }}</td><td>{{ 'Evet' if row.success else 'Hayır' }}</td><td>{{ row.created_at.strftime('%d.%m %H:%M:%S') if row.created_at else '' }}</td></tr>{% else %}<tr><td colspan="5">Henüz işlem kaydı yok.</td></tr>{% endfor %}</table></section>
 <section><h2>Son sağlık kayıtları</h2><table><tr><th>Bileşen</th><th>Durum</th><th>Detay</th><th>Zaman</th></tr>{% for row in health %}<tr><td>{{ row.component }}</td><td>{{ row.status }}</td><td>{{ row.details or '' }}</td><td>{{ row.checked_at.strftime('%d.%m %H:%M:%S') }}</td></tr>{% else %}<tr><td colspan="4">Henüz sağlık kaydı yok.</td></tr>{% endfor %}</table></section>
-</body></html>
+<script>
+(function(){
+  const bar=document.getElementById("savebar"), title=document.getElementById("save-title"), detail=document.getElementById("save-detail"), count=document.getElementById("save-count");
+  if(!bar)return;
+  const forms=[...document.querySelectorAll("form")].filter(f=>f.querySelector('input[name="csrf_token"]'));
+  const dirty=new Set(), prefix="kaplumbik-draft:";
+  const keyFor=f=>prefix+(f.id||f.getAttribute("action")||location.pathname);
+  function paint(){
+    const n=dirty.size;bar.dataset.state=n?"dirty":"saved";
+    title.textContent=n?"Kaydedilmemiş değişiklik var":"Her şey kayıtlı";
+    detail.textContent=n?"Taslak bu cihazda saklanıyor. Sunucuya kaydetmek için ilgili formun kaydet düğmesine bas.":"Kaydedilmemiş değişiklik görünmüyor.";
+    count.textContent=n?(n+" form bekliyor"):"0 bekleyen form";
+  }
+  function snapshot(f){
+    const values={};
+    for(const el of f.elements){
+      if(!el.name||el.type==="hidden"||el.type==="submit"||el.type==="button")continue;
+      values[el.name]=el.type==="checkbox"?el.checked:el.value;
+    }
+    try{localStorage.setItem(keyFor(f),JSON.stringify({values:values,updatedAt:Date.now()}));}catch(e){}
+  }
+  function restore(f){
+    let raw;try{raw=localStorage.getItem(keyFor(f));}catch(e){return;}
+    if(!raw)return;
+    try{
+      const draft=JSON.parse(raw);if(!draft||!draft.values)return;
+      let restored=false;
+      for(const el of f.elements){
+        if(!el.name||!(el.name in draft.values)||el.type==="hidden")continue;
+        if(el.type==="checkbox")el.checked=!!draft.values[el.name];else el.value=draft.values[el.name];
+        restored=true;
+      }
+      if(restored)dirty.add(f);
+    }catch(e){}
+  }
+  forms.forEach(f=>{
+    restore(f);
+    f.addEventListener("input",()=>{dirty.add(f);snapshot(f);paint();});
+    f.addEventListener("change",()=>{dirty.add(f);snapshot(f);paint();});
+    f.addEventListener("submit",()=>{try{localStorage.setItem("kaplumbik-last-submit",keyFor(f));}catch(e){}dirty.delete(f);paint();});
+  });
+  try{
+    const last=localStorage.getItem("kaplumbik-last-submit");
+    if(last){
+      const submitted=forms.find(f=>keyFor(f)===last);
+      if(submitted){try{localStorage.removeItem(keyFor(submitted));}catch(e){}dirty.delete(submitted);}
+      localStorage.removeItem("kaplumbik-last-submit");
+    }
+  }catch(e){}
+  window.addEventListener("beforeunload",e=>{if(dirty.size){e.preventDefault();e.returnValue="Kaydedilmemiş değişikliklerin var.";return e.returnValue;}});
+  paint();
+})();
+</script></body></html>
 """
 
 SETTING_KEYS = (

@@ -141,10 +141,14 @@ def test_event_announcement_uses_owner_written_template(monkeypatch):
 def test_final_event_reminder_is_two_hours_not_twelve():
     assert scheduler._reminder_kind(120 * 60, [15, 5]) == "final_2h"
     assert scheduler._reminder_kind(119.5 * 60, [15, 5]) == "final_2h"
+    assert scheduler._reminder_kind(118 * 60, [15, 5]) == "final_2h"
+    assert scheduler._reminder_kind(117 * 60, [15, 5]) is None
     assert scheduler._reminder_kind(12 * 60 * 60, [15, 5]) is None
 
 
 def test_configured_event_reminder_minutes_are_respected():
+    assert scheduler._reminder_kind(17 * 60, [15, 5]) == "reminder_15m"
+    assert scheduler._reminder_kind(13 * 60, [15, 5]) == "reminder_15m"
     assert scheduler._reminder_kind(15 * 60, [15, 5]) == "reminder_15m"
     assert scheduler._reminder_kind(5 * 60, [15, 5]) == "reminder_5m"
     assert scheduler._reminder_kind(10 * 60, [15, 5]) is None

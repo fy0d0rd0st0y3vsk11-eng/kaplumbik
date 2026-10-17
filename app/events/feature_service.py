@@ -18,7 +18,7 @@ DEFAULT_SETTINGS = {
     "new_member_intro": "Mahzen'e hoş geldin! Etkinliklere katılabilir, insanlarla tanışabilir ve oyunlardan puan kazanabilirsin.",
     "server_knowledge": "Kaplumbik, Mahzen sunucusunun sohbet eden yardımcı botudur. Üyelere kayıtlı kişi tanıtımlarını ve yönetim paneline eklenen sunucu bilgilerini aktarır; etkinlik/hatırlatma metinlerini yöneticinin yazdığı şekilde gönderir.",
     "daily_announcement_text": "🎮 Mahzen oyun hatırlatması! Bugün oyuna katılmak istiyorsan etkinliklere göz at ve katılımını bildir: /etkinlikler",
-    "event_announcement_template": "🎮 **{title}**\\n🕹️ Oyun: {game}\\n🕒 Başlangıç: {time}\\n{description}\\n{link}\\n{room_code}\\nKatılımını aşağıdaki butonlardan bildir!",
+    "event_announcement_template": "🎮 **{title}**\n🕹️ Oyun: {game}\n🕒 Başlangıç: {time}\n{description}\n{link}\n{room_code}\nKatılımını aşağıdaki butonlardan bildir!",
     "giveaway_min_points": "100",
 }
 

@@ -202,7 +202,7 @@ class EventScheduler(commands.Cog):
             if exists:
                 return
         ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"
-        text = ("@everyone\n" if ping else "") + "🎮 Mahzen oyun hatırlatması! Bugün oyuna katılmak istiyorsan etkinliklere göz at ve katılımını bildir: !etkinlikler"
+        text = ("@everyone\n" if ping else "") + "🎮 Mahzen oyun hatırlatması! Bugün oyuna katılmak istiyorsan etkinliklere göz at ve katılımını bildir: /etkinlikler"
         try:
             await channel.send(text, allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
             app = create_app()

@@ -6,7 +6,7 @@ from app import create_app
 from app.database import db
 from app.database.advanced_models import PersonProfile
 from app.events import assistant_features, scheduler
-from app.events.feature_service import set_setting
+from app.events.feature_service import LEGACY_DAILY_ANNOUNCEMENT, get_setting, set_setting
 
 
 class FakeResponse:
@@ -185,3 +185,9 @@ def test_daily_announcement_is_disabled_until_owner_writes_text():
     from app.events.feature_service import DEFAULT_SETTINGS
 
     assert DEFAULT_SETTINGS["daily_announcement_text"] == ""
+
+
+def test_legacy_daily_announcement_default_is_disabled(assistant_app):
+    with assistant_app.app_context():
+        set_setting("daily_announcement_text", LEGACY_DAILY_ANNOUNCEMENT)
+        assert get_setting("daily_announcement_text") == ""

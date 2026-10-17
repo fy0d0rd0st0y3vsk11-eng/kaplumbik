@@ -16,6 +16,10 @@ from app.dashboard.routes import owner_required, _require_csrf
 logger = logging.getLogger("kaplumbik.dashboard.advanced")
 
 
+def _normalize_template(value):
+    return (value or "").replace(chr(92) + "n", chr(10))
+
+
 def _local_time(value, fmt="%d.%m.%Y %H:%M"):
     if value is None:
         return ""
@@ -145,7 +149,7 @@ def advanced_index():
     values["announcement_times"] = get_setting("announcement_times", "12:00,17:00,20:00")
     values["game_reminder_minutes"] = get_setting("game_reminder_minutes", "15,5")
     values["daily_announcement_text"] = get_setting("daily_announcement_text", "")
-    values["event_announcement_template"] = get_setting("event_announcement_template", "")
+    values["event_announcement_template"] = _normalize_template(get_setting("event_announcement_template", ""))
     values["server_knowledge"] = get_setting("server_knowledge", "")
     people = db.session.query(PersonProfile).order_by(PersonProfile.name.asc()).limit(200).all()
     achievements = db.session.query(AchievementDefinition).order_by(AchievementDefinition.id).all()

@@ -58,7 +58,7 @@ def _reminder_kind(seconds, reminder_minutes):
 
 def _event_announcement_message(event):
     """Use the owner's template verbatim, replacing only documented placeholders."""
-    template = (_read_setting("event_announcement_template", "") or "").strip()
+    template = (_read_setting("event_announcement_template", "") or "").strip().replace("\\n", "\n")
     if not template:
         return format_event(event) + "\n\nKatılımını aşağıdaki butonlardan bildir."
 

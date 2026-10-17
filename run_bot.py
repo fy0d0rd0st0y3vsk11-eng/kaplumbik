@@ -3,6 +3,7 @@ import os
 import threading
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from waitress import serve
 
@@ -32,6 +33,26 @@ class KaplumbikBot(commands.Bot):
             command_prefix="!",
             intents=intents,
         )
+        self.tree.on_error = self._handle_app_command_error
+
+    async def _handle_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        original = getattr(error, "original", error)
+        if isinstance(original, app_commands.MissingPermissions):
+            message = "Bu komut için gerekli yönetici iznine sahip değilsin."
+        else:
+            logger.error(
+                "Slash komutu başarısız: %s",
+                type(original).__name__,
+                exc_info=(type(original), original, original.__traceback__),
+            )
+            message = "Komut çalışırken bir hata oluştu. Hata kaydı oluşturuldu; birazdan tekrar dene."
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+        except discord.HTTPException:
+            logger.exception("Slash komut hata mesajı gönderilemedi.")
 
     async def setup_hook(self):
         logger.info("Kaplumbik hazırlanıyor...")

@@ -465,10 +465,12 @@ class MahzenCommands(commands.Cog):
     async def mahzen_commands(self, interaction: discord.Interaction):
         await interaction.response.send_message(
             "**Mahzen komutları**\n"
-            "• /kisitanit — listeden kişi seç ve tanıtımını oku\n"
+            "• /kisitanit ve /tanit — listeden kişi seç ve tanıtımını oku\n"
+            "• /kimtasarladi — Kaplumbik'in tasarımcısını göster\n"
             "• /mahzenbilgi — kayıtlı Mahzen bilgileri\n"
             "• /oyunlar — kayıtlı oyun bağlantıları\n"
             "• /etkinlikler — yaklaşan etkinlikler\n"
+            "• /etkinlik — bir etkinliğin katılım butonlarını aç\n"
             "• /etkinlikbilgi — etkinlik saati ve katılım sayıları\n"
             "• /etkinlikgecmisi — etkinlik katılım geçmişi\n"
             "• /profil — puan ve profil bilgileri\n"

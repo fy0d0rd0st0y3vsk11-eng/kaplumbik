@@ -131,10 +131,10 @@ def test_event_announcement_uses_owner_written_template(monkeypatch):
     monkeypatch.setattr(
         scheduler,
         "_read_setting",
-        lambda key, default="": "Benim duyurum: {title} | {game} | {description}",
+        lambda key, default="": "Benim duyurum: {title} | {game} | {description} | kod:{room_code}",
     )
     result = scheduler._event_announcement_message(event)
-    assert result == "Benim duyurum: Mahzen oyun gecesi | Among Us | Herkes katılabilir."
+    assert result == "Benim duyurum: Mahzen oyun gecesi | Among Us | Herkes katılabilir. | kod:"
     assert "Katılımını aşağıdaki butonlardan bildir" not in result
 
 

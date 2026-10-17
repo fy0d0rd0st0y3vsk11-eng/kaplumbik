@@ -76,7 +76,7 @@ def _event_announcement_message(event):
         "time": local_start.strftime("%d.%m.%Y %H:%M"),
         "description": safe(event.description),
         "link": safe(event.game_link),
-        "room_code": safe(event.room_code if "among us" in (event.game or "").casefold() else ""),
+        "room_code": "",
     }
     message = template
     for key, value in values.items():

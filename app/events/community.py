@@ -28,6 +28,16 @@ def is_owner(i):
 def is_admin(i):
     return is_owner(i) or (isinstance(i.user, discord.Member) and i.user.guild_permissions.administrator)
 
+
+def can_manage_module(interaction,module_key):
+    if is_admin(interaction): return True
+    if not isinstance(interaction.user,discord.Member): return False
+    role_ids={str(role.id) for role in interaction.user.roles}
+    app=create_app()
+    with app.app_context():
+        rows=db.session.execute(select(FeaturePermission).where(FeaturePermission.module_key==module_key,FeaturePermission.can_manage.is_(True))).scalars().all()
+        return any(row.discord_role_id in role_ids for row in rows)
+
 def seed_quests():
     now = datetime.now(TR)
     monday = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -192,8 +202,8 @@ class MahzenCommunity(commands.Cog):
     @app_commands.command(name="oneridurum", description="Öneri durumunu yönetici olarak güncelle.")
     @app_commands.choices(durum=[app_commands.Choice(name="İnceleniyor",value="reviewing"),app_commands.Choice(name="Kabul edildi",value="accepted"),app_commands.Choice(name="Reddedildi",value="rejected"),app_commands.Choice(name="Uygulandı",value="implemented")])
     async def suggestion_status(self, interaction: discord.Interaction, onerino: int, durum: app_commands.Choice[str]):
-        if not is_admin(interaction):
-            await interaction.response.send_message("Yönetici yetkisi gerekiyor.",ephemeral=True); return
+        if not can_manage_module(interaction,"suggestions"):
+            await interaction.response.send_message("Öneri yönetimi izni gerekiyor.",ephemeral=True); return
         app=create_app()
         with app.app_context():
             row=db.session.get(CommunitySuggestion,onerino)

@@ -103,7 +103,7 @@ The module-permission record is not a substitute for enforcing permissions on ev
 - `/dukkan`, `/dukkanurunekle`, `/dukkanal`, `/koleksiyon` — configurable rewards and collection.
 - `/puangecmisi` — private recent point ledger.
 - `/sunucuhafizaoner`, `/sunucuhafizabekleyen`, `/sunucuhafizayonet` — proposed shared server knowledge requires moderator approval.
-- `/hafizami`, `/hafizamitemizle` — member access/deletion controls for personal AI conversation history.
+- `/hafiziyiac`, `/hafiziyikapat`, `/hafizami`, `/hafizamitemizle` — personal AI memory is opt-in and members can view or delete their own records.
 - `/izinprova`, `/modulizin` — dry-run permission report and owner-controlled module-role configuration.
 
 ### Security and operations

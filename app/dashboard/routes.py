@@ -130,6 +130,12 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 <div class="row"><div><label>Yoklama</label><select name="status"><option value="attended" {% if member.status == 'attended' %}selected{% endif %}>Katıldı</option><option value="absent" {% if member.status == 'absent' %}selected{% endif %}>Katılmadı</option></select></div><div><label>Verilecek puan (katıldıysa)</label><input name="reward_points" type="number" min="0" max="100000" value="0"></div></div>
 <button type="submit">Yoklamayı kaydet</button>{% if member.reward_approved %}<span class="tag">Ödül onaylandı</span>{% endif %}</form>
 {% endfor %}
+<details><summary>Etkinliği düzenle</summary><form method="post" action="{{ url_for('dashboard.edit_event_route', event_id=event.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>Etkinlik adı</label><input name="title" maxlength="150" value="{{ event.title }}" required>
+<div class="row"><div><label>Oyun</label><input name="game" maxlength="80" value="{{ event.game }}" required></div><div><label>Başlangıç (Türkiye saati)</label><input type="datetime-local" name="starts_at" value="{{ local_time(event.starts_at, '%Y-%m-%dT%H:%M') }}" required></div></div>
+<label>Açıklama</label><textarea name="description" maxlength="2000">{{ event.description or '' }}</textarea>
+<label>Oyun bağlantısı</label><input name="game_link" type="url" maxlength="500" value="{{ event.game_link or '' }}">
+<button type="submit">Değişiklikleri kaydet</button></form></details>
 <form method="post" action="{{ url_for('dashboard.cancel_event_route', event_id=event.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Etkinliği iptal et</button></form>
 </details>{% endif %}
 </div>{% endfor %}{% else %}<div class="empty">Henüz etkinlik yok.</div>{% endif %}

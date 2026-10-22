@@ -174,3 +174,31 @@ def set_channel_id(channel_id: str, actor_discord_id: str) -> None:
     db.session.add(AuditLog(actor_discord_id=str(actor_discord_id), action="streak.channel_set",
         target_type="channel", target_id=value, details={}, success=True))
     db.session.commit()
+
+
+def get_source_channel_ids() -> set[str]:
+    row = db.session.get(BotSetting, "streak_source_channel_ids")
+    if row is None or not row.value:
+        return set()
+    return {part.strip() for part in row.value.split(",") if part.strip().isdigit()}
+
+
+def set_source_channel(channel_id: str, add: bool, actor_discord_id: str) -> set[str]:
+    channels = get_source_channel_ids()
+    value = str(channel_id)
+    if add:
+        channels.add(value)
+    else:
+        channels.discard(value)
+    row = db.session.get(BotSetting, "streak_source_channel_ids")
+    serialized = ",".join(sorted(channels, key=int))
+    if row is None:
+        row = BotSetting(key="streak_source_channel_ids", value=serialized)
+        db.session.add(row)
+    else:
+        row.value = serialized
+    row.updated_by = str(actor_discord_id)
+    db.session.add(AuditLog(actor_discord_id=str(actor_discord_id), action="streak.source_channels_set",
+        target_type="channel", target_id=value, details={"add": add, "channels": sorted(channels, key=int)}, success=True))
+    db.session.commit()
+    return channels

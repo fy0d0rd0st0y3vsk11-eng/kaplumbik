@@ -63,11 +63,13 @@ PAGE = """
 <title>{{ title }} · Kaplumbik</title>
 <style>
 :root{color-scheme:light;--bg:#f5f3eb;--panel:#fffdf7;--line:#d9dfd0;--text:#30382f;--muted:#737d70;--accent:#7b9271;--good:#4f7657;--bad:#b65b52}
+{% if theme == "latte" %}:root{--bg:#f4eadb;--panel:#fff8ed;--line:#ded0bd;--text:#42382e;--muted:#817363;--accent:#a38a68}{% elif theme == "dark" %}:root{color-scheme:dark;--bg:#1b1d1a;--panel:#262a24;--line:#41483d;--text:#edf0e8;--muted:#b6c0ae;--accent:#a6bb96;--good:#8cc89b;--bad:#e08d84}{% endif %}
+{% if "overview" not in homepage_cards %}#overview-card{display:none}{% endif %}{% if "events" not in homepage_cards %}#events-create-card,#events-list-card{display:none}{% endif %}{% if "economy" not in homepage_cards %}#economy-adjust-card,#members-card,#transactions-card{display:none}{% endif %}{% if "security" not in homepage_cards %}#audit-card{display:none}{% endif %}{% if "streak" not in homepage_cards %}#streak-card{display:none}{% endif %}{% if "ai" not in homepage_cards %}#ai-card{display:none}{% endif %}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,sans-serif}
 header{padding:22px max(18px,calc((100% - 1180px)/2));border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px}
-main{max-width:1180px;margin:26px auto;padding:0 18px 48px}h1{font-size:26px;margin:0}h2{font-size:18px;margin:0 0 14px}p,.muted{color:var(--muted)}a{color:#c4b5fd}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
+main{max-width:1180px;margin:26px auto;padding:0 18px 48px}h1{font-size:26px;margin:0}h2{font-size:18px;margin:0 0 14px}p,.muted{color:var(--muted)}a{color:var(--accent)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px}.stat strong{font-size:25px;display:block}
-label{display:block;color:var(--muted);font-size:13px;margin:10px 0 5px}input,textarea,select{width:100%;padding:10px 11px;border-radius:9px;border:1px solid var(--line);background:#101117;color:var(--text);font:inherit}
+label{display:block;color:var(--muted);font-size:13px;margin:10px 0 5px}input,textarea,select{width:100%;padding:10px 11px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--text);font:inherit}
 textarea{min-height:75px;resize:vertical}button,.button{border:0;border-radius:9px;background:var(--accent);color:#171322;font-weight:700;padding:10px 13px;cursor:pointer;text-decoration:none;display:inline-block;margin-top:10px}button.secondary{background:#353747;color:var(--text)}button.danger{background:#7f1d1d;color:#fff}
 form{margin:0 0 12px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.event{padding:13px 0;border-top:1px solid var(--line)}.event:first-of-type{border-top:0}.tag{font-size:12px;border-radius:99px;background:#303044;padding:3px 8px;color:#ddd}.flash{padding:11px 13px;border-radius:10px;background:#29263c;margin-bottom:12px}.empty{color:var(--muted);padding:12px 0}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--line);font-size:13px;overflow-wrap:anywhere}th{color:var(--muted)}.table-wrap{overflow-x:auto}
@@ -81,14 +83,14 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 {% if not logged_in %}
 <section class="panel"><h2>Güvenli yönetici girişi</h2><p>Panel yalnızca yapılandırılmış sunucu sahibinin Discord hesabına açıktır.</p><a class="button" href="{{ url_for('dashboard.login') }}">Discord ile giriş yap</a></section>
 {% else %}
-<div class="stats">
+<div class="stats" id="overview-card">
 <div class="stat"><span class="muted">Üye profilleri</span><strong>{{ stats.members }}</strong></div>
 <div class="stat"><span class="muted">Planlanmış etkinlik</span><strong>{{ stats.events }}</strong></div>
 <div class="stat"><span class="muted">Toplam puan hareketi</span><strong>{{ stats.transactions }}</strong></div>
 <div class="stat"><span class="muted">Denetim kaydı</span><strong>{{ stats.audit }}</strong></div>
 </div>
 <div class="grid">
-<section class="panel"><h2>＋ Etkinlik oluştur</h2>
+<section class="panel" id="events-create-card"><h2>＋ Etkinlik oluştur</h2>
 <form method="post" action="{{ url_for('dashboard.create_event_route') }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 <label>Etkinlik adı</label><input name="title" maxlength="150" required>
@@ -97,7 +99,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 <label>Oyun bağlantısı</label><input name="game_link" type="url" maxlength="500" placeholder="https://...">
 <label>Oda kodu (panelde tutulur, herkese açık duyuruda gösterilmez)</label><input name="room_code" maxlength="100">
 <button type="submit">Etkinliği kaydet</button></form></section>
-<section class="panel"><h2>＋ Üye puanını düzenle</h2>
+<section class="panel" id="economy-adjust-card"><h2>＋ Üye puanını düzenle</h2>
 <form method="post" action="{{ url_for('dashboard.adjust_points_route') }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 <label>Üyenin Discord kullanıcı ID'si</label><input name="discord_id" inputmode="numeric" pattern="[0-9]{15,25}" required>
@@ -105,7 +107,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 <div class="row"><div><label>Puan (+ ekle / − çıkar)</label><input name="amount" type="number" min="-1000000" max="1000000" required></div><div><label>İşlem açıklaması</label><input name="description" maxlength="300" required></div></div>
 <button type="submit">Puan hareketini kaydet</button></form></section>
 </div>
-<section class="panel"><h2>Etkinlikler</h2>
+<section class="panel" id="events-list-card"><h2>Etkinlikler</h2>
 {% if events %}{% for event in events %}
 <div class="event"><strong>#{{ event.id }} · {{ event.title }}</strong> <span class="tag">{{ event.status }}</span>
 <div class="muted">{{ event.game }} · {{ local_time(event.starts_at) }} Türkiye saati</div>
@@ -125,7 +127,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 </details>{% endif %}
 </div>{% endfor %}{% else %}<div class="empty">Henüz etkinlik yok.</div>{% endif %}
 </section>
-<section class="panel"><h2>Üyeler ve bakiyeler</h2>
+<section class="panel" id="members-card"><h2>Üyeler ve bakiyeler</h2>
 <form method="get" action="{{ url_for('dashboard.index') }}">
 <label>Discord ID veya kullanıcı adına göre ara</label><input name="q" value="{{ member_query }}" maxlength="100" placeholder="Üye ara…">
 <button type="submit">Ara</button> {% if member_query %}<a href="{{ url_for('dashboard.index') }}">Temizle</a>{% endif %}
@@ -134,10 +136,10 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 {% for member in members %}<tr><td>{{ member.username or 'İsimsiz üye' }}</td><td>{{ member.discord_id }}</td><td>{{ member.balance }}</td><td>{{ member.total_event_points }}</td><td>{{ member.level }}</td><td>{{ local_time(member.last_event_at, '%d.%m.%Y') if member.last_event_at else '—' }}</td></tr>{% else %}<tr><td colspan="6">Üye bulunamadı.</td></tr>{% endfor %}
 </tbody></table></div></section>
 <div class="grid">
-<section class="panel"><h2>Son puan hareketleri</h2><div class="table-wrap"><table><thead><tr><th>Üye ID</th><th>Miktar</th><th>Açıklama</th><th>Tarih</th></tr></thead><tbody>
+<section class="panel" id="transactions-card"><h2>Son puan hareketleri</h2><div class="table-wrap"><table><thead><tr><th>Üye ID</th><th>Miktar</th><th>Açıklama</th><th>Tarih</th></tr></thead><tbody>
 {% for tx in transactions %}<tr><td>{{ tx.user.discord_id if tx.user else tx.user_id }}</td><td>{{ '+' if tx.amount > 0 else '' }}{{ tx.amount }}</td><td>{{ tx.description }}</td><td>{{ local_time(tx.created_at, '%d.%m %H:%M') }}</td></tr>{% else %}<tr><td colspan="4">Kayıt yok.</td></tr>{% endfor %}
 </tbody></table></div></section>
-<section class="panel"><h2>Denetim geçmişi</h2><div class="table-wrap"><table><thead><tr><th>İşlem</th><th>Yetkili</th><th>Hedef</th><th>Tarih</th></tr></thead><tbody>
+<section class="panel" id="audit-card"><h2>Denetim geçmişi</h2><div class="table-wrap"><table><thead><tr><th>İşlem</th><th>Yetkili</th><th>Hedef</th><th>Tarih</th></tr></thead><tbody>
 {% for item in audit_logs %}<tr><td>{{ item.action }}</td><td>{{ item.actor_discord_id or '—' }}</td><td>{{ item.target_id or '—' }}</td><td>{{ local_time(item.created_at, '%d.%m %H:%M') }}</td></tr>{% else %}<tr><td colspan="4">Kayıt yok.</td></tr>{% endfor %}
 </tbody></table></div></section>
 </div>
@@ -184,7 +186,7 @@ def index():
     if not logged_in:
         return render_template_string(
             PAGE, title="Giriş", logged_in=False, username="", csrf_token="",
-            stats={}, events=[], transactions=[], audit_logs=[], local_time=_local_time
+            stats={}, events=[], transactions=[], audit_logs=[], local_time=_local_time, theme="sage", homepage_cards=["overview","events","economy","security","streak","ai"], streak_stats={"today":0,"length":0}
         )
 
     owner_id = str(settings.owner_discord_id or "").strip()
@@ -217,12 +219,20 @@ def index():
         "transactions": db.session.scalar(select(func.count(EconomyTransaction.id))) or 0,
         "audit": db.session.scalar(select(func.count(AuditLog.id))) or 0,
     }
+    from app.events.feature_service import get_setting
+    theme = get_setting("dashboard_theme", "sage")
+    homepage_cards = [x for x in get_setting("dashboard_home_cards", "overview,events,economy,security,streak,ai").split(",") if x]
+    from app.seri.models import StreakDay
+    from app.seri.service import latest_streak_length, contribution_count
+    today = datetime.now(ZoneInfo("Europe/Istanbul")).date().isoformat()
+    today_row = db.session.execute(select(StreakDay).where(StreakDay.day == today)).scalar_one_or_none()
+    streak_stats = {"today": contribution_count(today_row) if today_row else 0, "length": latest_streak_length()}
     return render_template_string(
         PAGE, title="Panel", logged_in=True,
         username=session.get("username", "Yönetici"),
         csrf_token=_csrf_token(), stats=stats, events=events,
         transactions=transactions, audit_logs=audit_logs,
-        members=members, member_query=member_query, local_time=_local_time
+        members=members, member_query=member_query, local_time=_local_time, theme=theme, homepage_cards=homepage_cards, streak_stats=streak_stats
     )
 
 

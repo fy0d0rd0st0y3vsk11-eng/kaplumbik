@@ -117,3 +117,30 @@ This remains a development branch. A green GitHub Actions run confirms compile/t
 
 
 For dashboard Administrator read-only access, set `DISCORD_GUILD_ID` to the target Mahzen server ID and add the `guilds` scope to the Discord OAuth app. The configured owner remains the only account that can change critical dashboard settings and must pass TOTP. In Discord's server/channel permission settings, remove **Create Invite** from ordinary member roles if invite creation must be restricted; Kaplumbik's `/davet` command itself is admin-only but cannot override Discord's native permission system for the UI.
+
+
+## Fadehost setup (current development branch)
+
+Use the service's Python start command `python run_bot.py`. The process starts both the Discord bot and the Flask dashboard; the host must expose the assigned `PORT` to the web service. Do not run `run.py` as the bot start command.
+
+Set these environment variables in Fadehost (never commit secrets):
+
+- Required for bot + web startup: `DISCORD_TOKEN`, `APP_ENV=production`, a long random `SECRET_KEY`, and `DATABASE_URL`.
+- Required to sync commands to Mahzen and create/select `#seri` from the dashboard: `DISCORD_GUILD_ID`.
+- Required for owner dashboard login: `OWNER_DISCORD_ID`, `OWNER_TOTP_SECRET`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_REDIRECT_URI`.
+- Set `DISCORD_REDIRECT_URI` to the exact public Fadehost URL ending in `/dashboard/callback`, and add that same URL to the Discord Developer Portal OAuth2 Redirects list.
+- Required for AI replies: `OPENROUTER_API_KEY`. `OPENROUTER_MODEL` is optional; the code falls back to `openai/gpt-4o-mini`.
+- Required for encrypted production backups: `BACKUP_ENCRYPTION_KEY`. Keep a secure offline copy; losing it means encrypted backups cannot be decrypted.
+- For durable off-host backups, set `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY`, and `BACKUP_S3_SECRET_KEY`. If Fadehost storage is not persistent, local backups alone are not durable.
+- `BACKUP_DIR` and `LOG_LEVEL` are optional. Do not set `PORT` manually if Fadehost injects it; otherwise follow the host's port configuration.
+
+### First boot checklist
+
+1. Ensure the bot is invited to Mahzen with the required slash-command and channel permissions; enable **Message Content Intent** and **Server Members Intent** in the Discord Developer Portal.
+2. Configure the persistent database before relying on points, streaks, events or profiles. `db.create_all()` creates new tables but is not a replacement for a migration if an existing table schema changes.
+3. Open `/dashboard`, sign in with Discord, and finish owner TOTP verification.
+4. Open **Panel kişiselleştirme → Seri kanalı** and click **Mevcut #seri kanalını seç / yoksa oluştur**. The bot needs **Manage Channels** to create the channel. Then set one or more source chat channel IDs and save. The streak starts only after both output and source channels are configured.
+5. Test an event, a point transaction, an AI reply, a daily streak contribution and the backup status. Confirm the bot can read message history in each configured source channel.
+6. Test a database backup and restore procedure before relying on production data.
+
+A green automated test run does not prove the external host, OAuth settings, Discord permissions, AI provider or database persistence are configured correctly.

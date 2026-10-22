@@ -514,5 +514,27 @@ class AssistantFeatures(commands.Cog):
             await interaction.followup.send(content[:1900], allowed_mentions=discord.AllowedMentions.none())
 
 
+    @discord.app_commands.command(name="hafizami", description="Kaplumbik'in senin için sakladığı konuşma hafızasının özetini göster.")
+    async def my_memory(self, interaction: discord.Interaction):
+        app=create_app()
+        with app.app_context():
+            from sqlalchemy import select, func
+            count=db.session.scalar(select(func.count(ConversationMemory.id)).where(ConversationMemory.guild_id==str(interaction.guild_id or "dm"),ConversationMemory.discord_id==str(interaction.user.id))) or 0
+            recent=db.session.execute(select(ConversationMemory).where(ConversationMemory.guild_id==str(interaction.guild_id or "dm"),ConversationMemory.discord_id==str(interaction.user.id)).order_by(ConversationMemory.created_at.desc()).limit(5)).scalars().all()
+            snippets=[f"{row.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')} · {row.role}: {row.content[:100]}" for row in recent]
+        await interaction.response.send_message(f"Seninle doğrudan Kaplumbik arasındaki konuşmalardan kayıtlı satır: {count}.\nSon kayıtlar:\n"+("\n".join(snippets) if snippets else "Kayıt yok.")+"\nKayıtlarını temizlemek için /hafizamitemizle kullan.",ephemeral=True)
+
+    @discord.app_commands.command(name="hafizamitemizle", description="Yalnızca kendi konuşma hafızanı sil.")
+    async def clear_my_memory(self, interaction: discord.Interaction):
+        app=create_app()
+        with app.app_context():
+            rows=ConversationMemory.query.filter_by(guild_id=str(interaction.guild_id or "dm"),discord_id=str(interaction.user.id)).all()
+            deleted=len(rows)
+            for row in rows: db.session.delete(row)
+            db.session.add(__import__("app.database.models",fromlist=["AuditLog"]).AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_self_delete",target_type="conversation_memory",target_id=str(interaction.user.id),details={"deleted_rows":deleted},success=True))
+            db.session.commit()
+        await interaction.response.send_message(f"Kendi konuşma hafızandan {deleted} kayıt silindi.",ephemeral=True)
+
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(AssistantFeatures(bot))

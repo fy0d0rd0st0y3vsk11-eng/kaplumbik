@@ -90,9 +90,10 @@ def close_day(day: date, actor_discord_id: str | None = None) -> tuple[StreakDay
         StreakDay.day < row.day, StreakDay.status == "pending"
     ).limit(1)).scalar_one_or_none() is not None
     count = contribution_count(row)
+    previous_streak = latest_streak_length()
     if count >= GOAL and not pending_before:
         row.status = "completed"
-        row.streak_after = latest_streak_length() + 1
+        row.streak_after = previous_streak + 1
     else:
         row.status = "pending"
         row.streak_after = latest_streak_length()

@@ -50,3 +50,10 @@ def test_weekly_quest_progress_is_unique_per_member(app):
         with pytest.raises(IntegrityError): db.session.commit()
         db.session.rollback()
         assert WeeklyQuestProgress.query.filter_by(quest_id=quest.id,discord_id="3").count()==1
+
+def test_expiry_checks_accept_sqlite_naive_datetimes():
+    from app.events.community import as_utc, is_expired
+    naive_past=datetime(2020,1,1)
+    assert as_utc(naive_past).tzinfo is timezone.utc
+    assert is_expired(naive_past)
+    assert not is_expired(datetime.now(timezone.utc)+timedelta(days=1))

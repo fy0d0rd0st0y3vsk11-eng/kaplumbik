@@ -318,7 +318,7 @@ class MahzenCommunity(commands.Cog):
                 item=db.session.execute(select(RewardShopItem).where(RewardShopItem.key==urun,RewardShopItem.enabled.is_(True))).scalar_one_or_none()
                 if not item:
                     await interaction.response.send_message("Ürün bulunamadı. Mağazayı kontrol et.",ephemeral=True); return
-                existing=db.session.execute(select(MemberCollectionItem.id).where(MemberCollectionItem.discord_id==str(interaction.user.id),MemberCollectionItem.item_key==item_key, (MemberCollectionItem.expires_at.is_(None)) | (MemberCollectionItem.expires_at>utcnow()))).scalar_one_or_none()
+                existing=db.session.execute(select(MemberCollectionItem.id).where(MemberCollectionItem.discord_id==str(interaction.user.id),MemberCollectionItem.item_key==item.key, (MemberCollectionItem.expires_at.is_(None)) | (MemberCollectionItem.expires_at>utcnow()))).scalar_one_or_none()
                 if existing:
                     await interaction.response.send_message("Bu ürüne zaten sahipsin.",ephemeral=True); return
                 profile=db.session.execute(select(UserProfile).where(UserProfile.discord_id==str(interaction.user.id))).scalar_one_or_none()
@@ -349,7 +349,7 @@ class MahzenCommunity(commands.Cog):
                 except discord.HTTPException:
                     with app.app_context():
                         adjust_balance(str(interaction.user.id),price,"shop_refund",f"Rol ürünü verilemedi: {item_key}",actor_discord_id="kaplumbik",idempotency_key=f"shop-refund:{interaction.user.id}:{item_key}:{int(utcnow().timestamp())}")
-                        row=db.session.execute(select(MemberCollectionItem).where(MemberCollectionItem.discord_id==str(interaction.user.id),MemberCollectionItem.item_key==item.key)).scalar_one_or_none()
+                        row=db.session.execute(select(MemberCollectionItem).where(MemberCollectionItem.discord_id==str(interaction.user.id),MemberCollectionItem.item_key==item_key)).scalar_one_or_none()
                         if row: db.session.delete(row)
                         db.session.commit()
                     await interaction.response.send_message("Rol verilemedi; puan iadesi yapıldı.",ephemeral=True); return

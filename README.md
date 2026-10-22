@@ -96,7 +96,7 @@ The module-permission record is not a substitute for enforcing permissions on ev
 
 ### Community
 - `/takvim` — next 7 days of events.
-- `/anket`, `/anketoner` — button poll or AI-suggested draft (AI draft is not published automatically).
+- `/anket`, `/anketsonuc`, `/anketoner` — button poll, results, or AI-suggested draft (AI draft is not published automatically).
 - `/onerigonder`, `/onerioyla`, `/oneridurum` — suggestions, cooldown, voting and moderation status.
 - `/oyunprofil`, `/oyunarkadasi` — opt-in profile and game buddy matching.
 - `/gorevler`, `/goreval` — personal/shared weekly tasks and one-time rewards.
@@ -114,3 +114,6 @@ The module-permission record is not a substitute for enforcing permissions on ev
 - Dashboard owner access requires Discord OAuth and TOTP 2FA. Configure all environment secrets before production.
 
 This remains a development branch. A green GitHub Actions run confirms compile/test success for the tested commit, not a live Discord/Render deployment or a guarantee that every Discord permission and external integration is configured. Perform a real test-server rollout and a verified backup restore drill before production use.
+
+
+For dashboard Administrator read-only access, set `DISCORD_GUILD_ID` to the target Mahzen server ID and add the `guilds` scope to the Discord OAuth app. The configured owner remains the only account that can change critical dashboard settings and must pass TOTP. In Discord's server/channel permission settings, remove **Create Invite** from ordinary member roles if invite creation must be restricted; Kaplumbik's `/davet` command itself is admin-only but cannot override Discord's native permission system for the UI.

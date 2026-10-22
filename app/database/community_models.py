@@ -79,6 +79,7 @@ class WeeklyQuestProgress(db.Model):
     quest_id=db.Column(db.Integer,db.ForeignKey("weekly_quests.id",ondelete="CASCADE"),nullable=False)
     discord_id=db.Column(db.String(25),nullable=False,index=True)
     progress=db.Column(db.Integer,nullable=False,default=0)
+    last_activity_day=db.Column(db.String(10),nullable=True)
     claimed_at=db.Column(db.DateTime(timezone=True),nullable=True)
     updated_at=db.Column(db.DateTime(timezone=True),nullable=False,default=utc_now,onupdate=utc_now)
     __table_args__=(db.UniqueConstraint("quest_id","discord_id",name="uq_quest_member"),)

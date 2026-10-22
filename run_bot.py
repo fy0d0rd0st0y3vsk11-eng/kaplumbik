@@ -72,6 +72,9 @@ class KaplumbikBot(commands.Bot):
         await self.load_extension("app.events.scheduler")
         logger.info("Zamanlanmış duyuru sistemi yüklendi.")
 
+        await self.load_extension("app.seri.commands")
+        logger.info("Mahzen ortak seri sistemi yüklendi.")
+
         # Slash komutlarını Discord'a kaydet.
         # Test sunucusu ID'si verilirse komutlar o sunucuda hemen görünür;
         # verilmezse global kayıt yapılır (yayılması daha uzun sürebilir).

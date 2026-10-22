@@ -14,7 +14,8 @@ from app.core.config import settings
 from app.database import db
 from app.database.community_models import MemberGameProfile, CommunityPoll, CommunityPollVote, CommunitySuggestion, CommunitySuggestionVote, WeeklyQuest, WeeklyQuestProgress, RewardShopItem, MemberCollectionItem, FeaturePermission, ServerMemoryProposal
 from app.database.models import AuditLog, EconomyTransaction, UserProfile
-from app.events.feature_service import get_setting, set_setting
+from app.database.advanced_models import BotSetting
+from app.events.feature_service import get_setting
 
 log = logging.getLogger("kaplumbik.community")
 TR = ZoneInfo("Europe/Istanbul")
@@ -107,7 +108,9 @@ class MahzenCommunity(commands.Cog):
                 addition=f"\n- Yönetici onaylı ortak bilgi (öneri #{proposal.id}, {datetime.now(TR).strftime('%Y-%m-%d')}): {proposal.content}"
                 if len(current)+len(addition)>8000:
                     await interaction.response.send_message("Sunucu bilgi alanı dolu. Önce panelden eski bilgileri düzenle.",ephemeral=True); return
-                set_setting("server_knowledge",current+addition,str(interaction.user.id))
+                knowledge_row=db.session.get(BotSetting,"server_knowledge")
+                if knowledge_row is None: knowledge_row=BotSetting(key="server_knowledge",value=current+addition,updated_by=str(interaction.user.id)); db.session.add(knowledge_row)
+                else: knowledge_row.value=current+addition; knowledge_row.updated_by=str(interaction.user.id)
             proposal.status=karar.value; proposal.reviewed_by=str(interaction.user.id); proposal.reviewed_at=utcnow()
             db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.server_memory_review",target_type="server_memory_proposal",target_id=str(proposal.id),details={"decision":karar.value},success=True)); db.session.commit()
         await interaction.response.send_message(f"Ortak bilgi önerisi #{onerino}: {karar.name}.",ephemeral=True)

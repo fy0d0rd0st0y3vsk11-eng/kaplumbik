@@ -266,3 +266,11 @@ def test_conversation_memory_ignores_empty_and_truncates_long_messages(assistant
         row = ConversationMemory.query.one()
         assert len(row.content) == 3000
 
+
+def test_personal_memory_is_off_until_member_opts_in(assistant_app, monkeypatch):
+    from app.database.advanced_models import ConversationMemory
+    monkeypatch.setattr(assistant_features, "create_app", lambda: assistant_app)
+    assistant_features._save_conversation_memory("guild-1","channel-1","member-1","Member","user","Do not persist by default")
+    assert assistant_features._load_conversation_memory("guild-1","member-1","anything") == ""
+    with assistant_app.app_context():
+        assert ConversationMemory.query.count() == 0

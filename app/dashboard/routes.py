@@ -90,6 +90,10 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 <div class="stat"><span class="muted">Denetim kaydı</span><strong>{{ stats.audit }}</strong></div>
 </div>
 <div class="grid">
+{% if "streak" in homepage_cards %}<section class="panel" id="streak-card"><h2>Ortak seri</h2><p>Bugünkü katkı: <strong>{{ streak_stats.today }}/3</strong> farklı üye</p><p>Mevcut seri: <strong>{{ streak_stats.length }} gün</strong></p><a href="{{ url_for('dashboard.community_settings') }}">Panel ve seri ayarları</a></section>{% endif %}
+{% if "ai" in homepage_cards %}<section class="panel" id="ai-card"><h2>AI kontrol merkezi</h2><p>AI kişiliği, model, sunucu bilgisi ve sistem sağlığı.</p><a href="{{ url_for('dashboard.advanced_index') }}">Gelişmiş ayarları aç</a></section>{% endif %}
+</div>
+<div class="grid">
 <section class="panel" id="events-create-card"><h2>＋ Etkinlik oluştur</h2>
 <form method="post" action="{{ url_for('dashboard.create_event_route') }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

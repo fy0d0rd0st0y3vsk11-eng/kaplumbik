@@ -396,7 +396,12 @@ class MahzenCommunity(commands.Cog):
                     await interaction.response.send_message("Bu görevin ödülünü zaten aldın.",ephemeral=True); return
                 if db.session.execute(select(UserProfile.id).where(UserProfile.discord_id==str(interaction.user.id))).scalar_one_or_none() is None:
                     db.session.add(UserProfile(discord_id=str(interaction.user.id),balance=0)); db.session.commit()
-                adjust_balance(str(interaction.user.id),int(quest.reward_points),"weekly_quest",f"Haftalık görev: {quest.title}",actor_discord_id="kaplumbik",idempotency_key=f"quest:{quest.id}:{interaction.user.id}")
+                reward_key=f"quest:{quest.id}:{interaction.user.id}"
+                try:
+                    adjust_balance(str(interaction.user.id),int(quest.reward_points),"weekly_quest",f"Haftalık görev: {quest.title}",actor_discord_id="kaplumbik",idempotency_key=reward_key)
+                except DuplicateTransactionError:
+                    already=db.session.execute(select(EconomyTransaction.id).where(EconomyTransaction.idempotency_key==reward_key)).scalar_one_or_none()
+                    if already is None: raise
                 progress.claimed_at=utcnow()
                 db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="quest.reward_claimed",target_type="quest",target_id=str(quest.id),details={"reward":quest.reward_points},success=True))
                 db.session.commit()

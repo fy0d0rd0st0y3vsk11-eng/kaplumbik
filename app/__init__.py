@@ -37,6 +37,7 @@ def create_app(test_config=None):
     from app.database import event_models  # noqa: F401
     from app.database import advanced_models  # noqa: F401
     from app.seri import models as streak_models  # noqa: F401
+    from app.database import community_models  # noqa: F401
 
     with app.app_context():
         from app.database import db

@@ -77,6 +77,60 @@ class PollView(discord.ui.View):
 class MahzenCommunity(commands.Cog):
     def __init__(self, bot): self.bot=bot
 
+
+    @app_commands.command(name="takvim", description="Önümüzdeki 7 günün Mahzen etkinlik takvimini göster.")
+    async def event_calendar(self, interaction: discord.Interaction):
+        from app.database.event_models import Event
+        app=create_app()
+        with app.app_context():
+            start=utcnow(); end=start+timedelta(days=7)
+            events=db.session.execute(select(Event).where(Event.status=="scheduled",Event.starts_at>=start,Event.starts_at<=end).order_by(Event.starts_at.asc()).limit(20)).scalars().all()
+            snapshot=[(e.id,e.title,e.game,e.starts_at,e.description) for e in events]
+        if not snapshot:
+            await interaction.response.send_message("Önümüzdeki 7 gün için planlanmış etkinlik yok. Yeni etkinlikler eklenince burada görünecek.",ephemeral=False); return
+        lines=[]
+        for event_id,title,game,starts,description in snapshot:
+            if starts.tzinfo is None: starts=starts.replace(tzinfo=timezone.utc)
+            lines.append(f"<t:{int(starts.timestamp())}:F> · **{title}** ({game})"+(f"\n{description[:120]}" if description else "")+f" · etkinlik #{event_id}")
+        await interaction.response.send_message("📅 **Mahzen etkinlik takvimi · 7 gün**\n"+"\n".join(lines)[:1900],allowed_mentions=discord.AllowedMentions.none())
+
+    @app_commands.command(name="puangecmisi", description="Kendi puan hareketlerinin son 10 kaydını göster.")
+    async def point_history(self, interaction: discord.Interaction):
+        app=create_app()
+        with app.app_context():
+            profile=db.session.execute(select(UserProfile).where(UserProfile.discord_id==str(interaction.user.id))).scalar_one_or_none()
+            if not profile:
+                await interaction.response.send_message("Henüz puan hesabın yok.",ephemeral=True); return
+            rows=db.session.execute(select(EconomyTransaction).where(EconomyTransaction.user_id==profile.id).order_by(EconomyTransaction.created_at.desc()).limit(10)).scalars().all()
+            balance=profile.balance
+            snapshot=[(x.amount,x.description,x.created_at,x.balance_after) for x in rows]
+        lines=[]
+        for amount,description,created,balance_after in snapshot:
+            if created.tzinfo is None: created=created.replace(tzinfo=timezone.utc)
+            lines.append(f"{'+' if amount>0 else ''}{amount} · {description[:90]} · bakiye {balance_after} · <t:{int(created.timestamp())}:R>")
+        await interaction.response.send_message(f"💰 **Puan geçmişin** · güncel bakiye: {balance}\n"+("\n".join(lines) if lines else "Henüz işlem yok."),ephemeral=True)
+
+    @app_commands.command(name="izinprova", description="Bir üyenin kanaldaki izinlerini değişiklik yapmadan simüle et.")
+    async def permission_simulation(self, interaction: discord.Interaction, uye: discord.Member, kanal: discord.TextChannel):
+        if not is_admin(interaction):
+            await interaction.response.send_message("İzin simülasyonu yalnızca sunucu sahibi veya Administrator yetkilisine açık.",ephemeral=True); return
+        permissions=kanal.permissions_for(uye)
+        role_ids={str(role.id) for role in uye.roles}
+        app=create_app()
+        with app.app_context():
+            module_rows=db.session.execute(select(FeaturePermission).where(FeaturePermission.can_manage.is_(True))).scalars().all()
+            modules=sorted({row.module_key for row in module_rows if row.discord_role_id in role_ids})
+        checks=[
+            ("Kanalı görüntüleme",permissions.view_channel),("Mesaj gönderme",permissions.send_messages),
+            ("Mesajları yönetme",permissions.manage_messages),("@everyone/@here",permissions.mention_everyone),
+            ("Rol yönetimi",permissions.manage_roles),("Üyeleri timeout",permissions.moderate_members),
+            ("Administrator",permissions.administrator),
+        ]
+        lines=[("✅" if allowed else "❌")+" "+label for label,allowed in checks]
+        lines.append("Modül rol kayıtları: "+(", ".join(modules) if modules else "yok"))
+        lines.append("Bu işlem yalnızca rapor üretir; hiçbir rol veya izin değiştirilmedi.")
+        await interaction.response.send_message(f"🧪 **İzin provası** · {uye.mention} · {kanal.mention}\n"+"\n".join(lines),ephemeral=True,allowed_mentions=discord.AllowedMentions.none())
+
     @app_commands.command(name="oyunprofil", description="Oyun arkadaşlığı için profilini oluştur veya güncelle.")
     async def game_profile(self, interaction: discord.Interaction, oyunlar: str, platform: str, uygunluk: str, ses: str="either", tarz: str="", gorunur: bool=True):
         games=list(dict.fromkeys(x.strip()[:50] for x in oyunlar.split(",") if x.strip()))[:12]

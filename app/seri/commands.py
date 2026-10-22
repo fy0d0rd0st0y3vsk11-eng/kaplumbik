@@ -1,6 +1,6 @@
 """Commands and listener for Mahzen's shared daily streak."""
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import discord
@@ -76,9 +76,9 @@ class SharedStreak(commands.Cog):
     async def on_ready(self):
         if self._history_backfilled:
             return
-        self._history_backfilled = True
         try:
             await self._backfill_accessible_history()
+            self._history_backfilled = True
         except Exception:
             logger.exception("Seri geçmişini bot açılışında taramak başarısız oldu.")
 

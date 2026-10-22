@@ -428,8 +428,8 @@ class MahzenCommunity(commands.Cog):
 
     @app_commands.command(name="dukkanurunekle", description="Mağazaya ürün ekle (yönetici).")
     async def add_shop_item(self, interaction: discord.Interaction, anahtar: str, baslik: str, fiyat: app_commands.Range[int,0,1000000], aciklama: str, tur: str="cosmetic", rol: discord.Role | None=None, sure_gun: app_commands.Range[int,1,3650] | None=None):
-        if not is_admin(interaction):
-            await interaction.response.send_message("Yönetici yetkisi gerekiyor.",ephemeral=True); return
+        if not can_manage_module(interaction,"economy"):
+            await interaction.response.send_message("Ekonomi modülü yönetim izni gerekiyor.",ephemeral=True); return
         if not anahtar.replace("_","").replace("-","").isalnum() or len(anahtar)>80 or len(baslik)>120 or len(aciklama)>300 or tur not in {"cosmetic","role","badge","collection"}:
             await interaction.response.send_message("Ürün alanları geçersiz.",ephemeral=True); return
         if tur=="role" and rol is None:

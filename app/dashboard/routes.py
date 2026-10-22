@@ -55,7 +55,7 @@ discord_oauth = oauth.register(
     authorize_url="https://discord.com/oauth2/authorize",
     access_token_url="https://discord.com/api/oauth2/token",
     api_base_url="https://discord.com/api/",
-    client_kwargs={"scope": "identify"},
+    client_kwargs={"scope": "identify guilds"},
 )
 
 PAGE = """
@@ -96,7 +96,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 {% if "streak" in homepage_cards %}<section class="panel" id="streak-card"><h2>Ortak seri</h2><p>Bugünkü katkı: <strong>{{ streak_stats.today }}/3</strong> farklı üye</p><p>Mevcut seri: <strong>{{ streak_stats.length }} gün</strong></p><a href="{{ url_for('dashboard.community_settings') }}">Panel ve seri ayarları</a></section>{% endif %}
 {% if "ai" in homepage_cards %}<section class="panel" id="ai-card"><h2>AI kontrol merkezi</h2><p>AI kişiliği, model, sunucu bilgisi ve sistem sağlığı.</p><a href="{{ url_for('dashboard.advanced_index') }}">Gelişmiş ayarları aç</a></section>{% endif %}
 </div>
-<div class="grid">
+<div class="grid owner-only">
 <section class="panel" id="events-create-card"><h2>＋ Etkinlik oluştur</h2>
 <form method="post" action="{{ url_for('dashboard.create_event_route') }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -122,7 +122,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 {% if event.game_link %}<p><a href="{{ event.game_link }}" rel="noopener noreferrer" target="_blank">Oyun bağlantısı</a></p>{% endif %}
 <div class="muted">Katılım kayıtları: {{ event.participations|length }}</div>
 {% if event.status == 'scheduled' %}
-<details><summary>Katılımı yönet / ödül ver</summary>
+<details class="owner-only"><summary>Katılımı yönet / ödül ver</summary>
 {% for member in event.participations %}
 <form method="post" action="{{ url_for('dashboard.attendance_route', event_id=event.id) }}" class="event">
 <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="discord_id" value="{{ member.discord_id }}">
@@ -227,13 +227,14 @@ def index():
     if not logged_in:
         return render_template_string(
             PAGE, title="Giriş", logged_in=False, username="", csrf_token="",
-            stats={}, events=[], transactions=[], audit_logs=[], local_time=_local_time, theme="sage", homepage_cards=["overview","events","economy","security","streak","ai"], streak_stats={"today":0,"length":0}
+            stats={}, events=[], transactions=[], audit_logs=[], local_time=_local_time, theme="sage", homepage_cards=["overview","events","economy","security","streak","ai"], streak_stats={"today":0,"length":0}, is_owner=False
         )
 
     owner_id = str(settings.owner_discord_id or "").strip()
-    if not owner_id or not secrets.compare_digest(str(session["discord_id"]), owner_id):
+    is_owner_user = bool(owner_id and secrets.compare_digest(str(session["discord_id"]), owner_id))
+    if not is_owner_user and not session.get("is_guild_admin"):
         session.clear()
-        abort(403, description="Bu panel yalnızca sunucu sahibi için açık.")
+        abort(403, description="Bu panel yalnızca sunucu sahibi veya hedef sunucu Administrator yetkilisine açık.")
 
     from sqlalchemy import select, func, or_
 
@@ -273,7 +274,7 @@ def index():
         username=session.get("username", "Yönetici"),
         csrf_token=_csrf_token(), stats=stats, events=events,
         transactions=transactions, audit_logs=audit_logs,
-        members=members, member_query=member_query, local_time=_local_time, theme=theme, homepage_cards=homepage_cards, streak_stats=streak_stats
+        members=members, member_query=member_query, local_time=_local_time, theme=theme, homepage_cards=homepage_cards, streak_stats=streak_stats, is_owner=is_owner_user
     )
 
 
@@ -296,17 +297,33 @@ def callback():
         user = response.json()
         discord_id = str(user.get("id", ""))
         owner_id = str(settings.owner_discord_id or "").strip()
-        if not discord_id or not owner_id or not secrets.compare_digest(discord_id, owner_id):
+        username = str(user.get("global_name") or user.get("username") or "Yönetici")[:100]
+        is_owner_user = bool(discord_id and owner_id and secrets.compare_digest(discord_id, owner_id))
+        is_guild_admin = False
+        if not is_owner_user and discord_id and settings.discord_guild_id and settings.discord_guild_id.isdigit():
+            guild_response = discord_oauth.get("users/@me/guilds")
+            guild_response.raise_for_status()
+            for guild_info in guild_response.json():
+                if str(guild_info.get("id")) == str(settings.discord_guild_id):
+                    try: is_guild_admin = bool(int(guild_info.get("permissions", "0")) & 0x8)
+                    except (TypeError, ValueError): is_guild_admin = False
+                    break
+        if not discord_id or not (is_owner_user or is_guild_admin):
             session.clear()
-            abort(403, description="Bu Discord hesabının yönetim paneli erişimi yok.")
-        if not settings.owner_totp_secret:
-            session.clear()
-            abort(503, description="Sahip paneline giriş için OWNER_TOTP_SECRET ortam değişkeninde TOTP 2FA sırrı yapılandırılmalı.")
+            abort(403, description="Bu panel için sunucu sahibi veya hedef sunucuda Administrator yetkisi gerekir.")
         session.clear()
-        session["pending_2fa_discord_id"] = discord_id
-        session["pending_2fa_username"] = str(user.get("global_name") or user.get("username") or "Yönetici")[:100]
+        if is_owner_user:
+            if not settings.owner_totp_secret:
+                abort(503, description="Sahip paneline giriş için OWNER_TOTP_SECRET ortam değişkeninde TOTP 2FA sırrı yapılandırılmalı.")
+            session["pending_2fa_discord_id"] = discord_id
+            session["pending_2fa_username"] = username
+            session["csrf_token"] = secrets.token_urlsafe(32)
+            return redirect(url_for("dashboard.owner_2fa"))
+        session["discord_id"] = discord_id
+        session["username"] = username
+        session["is_guild_admin"] = True
         session["csrf_token"] = secrets.token_urlsafe(32)
-        return redirect(url_for("dashboard.owner_2fa"))
+        return redirect(url_for("dashboard.index"))
     except HTTPException:
         raise
     except Exception:

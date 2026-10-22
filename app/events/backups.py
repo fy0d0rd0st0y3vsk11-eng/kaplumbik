@@ -51,8 +51,8 @@ def _s3_client():
     import boto3
     return boto3.client("s3",endpoint_url=endpoint,aws_access_key_id=access,aws_secret_access_key=secret)
 
-def create_backup():
-    app=create_app()
+def create_backup(application=None):
+    app=application or create_app()
     with app.app_context():
         metadata=db.metadata
         tables=[]
@@ -96,7 +96,7 @@ def create_backup():
         db.session.commit()
         return str(path),remote
 
-def restore_backup(path):
+def restore_backup(path, application=None):
     """Destructive restore helper. Caller must explicitly confirm before invoking."""
     source=Path(path)
     raw=source.read_bytes()
@@ -107,7 +107,7 @@ def restore_backup(path):
     if raw[:2]==b"\\x1f\\x8b": raw=gzip.decompress(raw)
     payload=json.loads(raw.decode("utf-8"))
     if payload.get("format_version")!=1 or not isinstance(payload.get("tables"),list): raise ValueError("Unsupported or invalid backup format.")
-    app=create_app()
+    app=application or create_app()
     with app.app_context():
         table_map={table.name:table for table in db.metadata.sorted_tables}
         incoming={item.get("name"):item.get("rows",[]) for item in payload["tables"]}
@@ -121,6 +121,7 @@ def restore_backup(path):
                     for column in table.columns:
                         if column.name in row: values[column.name]=_decode(row[column.name],column)
                     connection.execute(table.insert().values(**values))
+        db.session.expire_all()
     return len(payload["tables"])
 
 class BackupCog(commands.Cog):

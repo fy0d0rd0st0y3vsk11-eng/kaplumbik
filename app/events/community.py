@@ -1,4 +1,7 @@
 import logging
+import asyncio
+import json
+import requests
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import discord
@@ -94,6 +97,30 @@ class MahzenCommunity(commands.Cog):
             await interaction.response.send_message(f"{oyun} için görünür profil bulamadım. Üyeler oyun profili ekleyebilir.",ephemeral=True); return
         lines=[f"<@{uid}> · {platform or 'Platform yok'} · {avail or 'Uygunluk yok'} · ses: {voice} · {style}" for _,uid,platform,avail,voice,style in matches[:10]]
         await interaction.response.send_message("Oyun arkadaşları\n"+"\n".join(lines),ephemeral=True,allowed_mentions=discord.AllowedMentions.none())
+
+
+    @app_commands.command(name="anketoner", description="Bir konu için AI'dan anket taslağı iste; hiçbir şey otomatik yayımlanmaz.")
+    async def suggest_poll(self, interaction: discord.Interaction, konu: str):
+        if not settings.openrouter_api_key or not settings.openrouter_model:
+            await interaction.response.send_message("AI anket önerisi için OPENROUTER_API_KEY ve OPENROUTER_MODEL ayarlanmalı.",ephemeral=True); return
+        if not konu.strip() or len(konu)>300:
+            await interaction.response.send_message("Konu 1–300 karakter olmalı.",ephemeral=True); return
+        await interaction.response.defer(thinking=True,ephemeral=True)
+        def request_suggestion():
+            response=requests.post("https://openrouter.ai/api/v1/chat/completions",headers={"Authorization":f"Bearer {settings.openrouter_api_key}","Content-Type":"application/json"},json={"model":settings.openrouter_model,"temperature":0.5,"max_tokens":250,"messages":[{"role":"system","content":"Türkçe Discord topluluğu için tarafsız, kısa anket taslağı üret. Yalnızca geçerli JSON döndür: {\"question\":\"...\",\"options\":[\"...\",\"...\"]}. 2-5 kısa seçenek. Siyasi/kişisel hassas veri sorma."},{"role":"user","content":f"Konu: {konu.strip()}"}]},timeout=20)
+            response.raise_for_status()
+            data=response.json()
+            return data["choices"][0]["message"]["content"]
+        try:
+            raw=await asyncio.to_thread(request_suggestion)
+            parsed=json.loads(raw[raw.find("{"):raw.rfind("}")+1])
+            question=str(parsed.get("question","")).strip()[:300]
+            options=list(dict.fromkeys(str(x).strip()[:80] for x in parsed.get("options",[]) if str(x).strip()))[:5]
+            if not question or len(options)<2: raise ValueError("AI output did not contain a valid question and options")
+            await interaction.followup.send("Anket taslağı (henüz yayımlanmadı):\nSoru: "+question+"\nSeçenekler: "+" | ".join(options)+"\nİstersen bu metni /anket komutunda kullan.",ephemeral=True)
+        except Exception:
+            log.exception("AI poll suggestion failed")
+            await interaction.followup.send("Anket önerisi oluşturulamadı. Model ayarlarını kontrol et veya konuyu değiştir.",ephemeral=True)
 
     @app_commands.command(name="anket", description="2–5 seçenekli anket oluştur.")
     async def create_poll(self, interaction: discord.Interaction, soru: str, secenekler: str, sure_saat: app_commands.Range[int,1,168]=24, anonim: bool=False):

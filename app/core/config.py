@@ -24,6 +24,7 @@ class Settings:
     app_env: str = os.getenv("APP_ENV", "development")
     secret_key: str = os.getenv("SECRET_KEY", "")
     owner_discord_id: str = os.getenv("OWNER_DISCORD_ID", "")
+    owner_totp_secret: str = os.getenv("OWNER_TOTP_SECRET", "").replace(" ", "").upper()
 
     discord_token: str = os.getenv("DISCORD_TOKEN", "")
     discord_client_id: str = os.getenv("DISCORD_CLIENT_ID", "")

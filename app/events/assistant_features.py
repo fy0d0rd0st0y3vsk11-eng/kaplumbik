@@ -2,7 +2,7 @@ import asyncio
 import logging
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import discord
 import requests
@@ -61,6 +61,22 @@ def _save_conversation_memory(guild_id: str, channel_id: str | None, discord_id:
             content=text,
         )
         db.session.add(row)
+        db.session.commit()
+        # Retain a useful long-term history without allowing unbounded growth.
+        cutoff = datetime.now(timezone.utc) - timedelta(days=365)
+        db.session.query(ConversationMemory).filter(
+            ConversationMemory.guild_id == str(guild_id or "dm"),
+            ConversationMemory.discord_id == str(discord_id),
+            ConversationMemory.created_at < cutoff,
+        ).delete(synchronize_session=False)
+        overflow_ids = list(db.session.execute(
+            __import__("sqlalchemy").select(ConversationMemory.id)
+            .where(ConversationMemory.guild_id == str(guild_id or "dm"), ConversationMemory.discord_id == str(discord_id))
+            .order_by(ConversationMemory.created_at.desc(), ConversationMemory.id.desc())
+            .offset(1000)
+        ).scalars())
+        if overflow_ids:
+            db.session.query(ConversationMemory).filter(ConversationMemory.id.in_(overflow_ids)).delete(synchronize_session=False)
         db.session.commit()
 
 

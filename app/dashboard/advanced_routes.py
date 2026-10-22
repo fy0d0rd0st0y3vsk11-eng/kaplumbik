@@ -1,5 +1,6 @@
 import logging
 import secrets
+import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -308,6 +309,7 @@ def community_settings_save():
 def advanced_index():
     seed_achievements()
     values = {key: get_setting(key) for key in SETTING_KEYS}
+    values["openrouter_model"] = get_setting("openrouter_model", settings.openrouter_model or "openai/gpt-4o-mini")
     values["announcement_times"] = get_setting("announcement_times", "12:00,17:00,20:00")
     values["game_reminder_minutes"] = get_setting("game_reminder_minutes", "15,5")
     values["daily_announcement_text"] = get_setting("daily_announcement_text", "")
@@ -329,6 +331,29 @@ def advanced_index():
     return render_template_string(SETTINGS_PAGE, values=values, people=people, giveaways=giveaways, achievements=achievements, health=health, audit_logs=audit_logs, announcement_logs=announcement_logs, cancelled_events=cancelled_events, members=members, member_q=member_q, csrf_token=session.get("csrf_token", ""), local_time=_local_time)
 
 
+
+@dashboard_bp.post("/advanced/ai-test")
+@owner_required
+def ai_test():
+    _require_csrf()
+    prompt = request.form.get("prompt", "").strip()[:1000]
+    if not prompt:
+        flash("AI test mesajı boş olamaz.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        from app.events.assistant_features import _ai_request
+        answer = _ai_request(
+            prompt,
+            get_setting("ai_personality", ""),
+            get_setting("server_knowledge", ""),
+        )
+        return render_template_string("""<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kaplumbik AI test sonucu</title><style>body{font:15px/1.6 system-ui,sans-serif;background:#f5f3eb;color:#30382f;max-width:850px;margin:35px auto;padding:0 18px}main{background:#fffdf7;border:1px solid #d9dfd0;border-radius:18px;padding:24px;box-shadow:0 12px 32px #34412b0d}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f8f7f0;border:1px solid #d9dfd0;border-radius:12px;padding:16px;font:inherit}a{color:#536c49;font-weight:700}</style></head><body><main><h1>🧪 AI test sonucu</h1><p>Bu yanıt test ekranında üretildi; Discord'a gönderilmedi.</p><pre>{{ answer }}</pre><a href="{{ url_for('dashboard.advanced_index') }}">← Gelişmiş ayarlara dön</a></main></body></html>""", answer=answer)
+    except Exception:
+        logger.exception("Dashboard AI test failed.")
+        flash("AI testi başarısız. OPENROUTER_API_KEY, seçilen model ve servis günlüklerini kontrol et.")
+        return redirect(url_for("dashboard.advanced_index"))
+
+
 @dashboard_bp.post("/advanced/save")
 @owner_required
 def advanced_save():
@@ -336,6 +361,8 @@ def advanced_save():
     actor = str(session["discord_id"])
     try:
         values = {key: request.form.get(key, "").strip() for key in SETTING_KEYS}
+        if values["openrouter_model"] and (len(values["openrouter_model"]) > 150 or not re.fullmatch(r"[A-Za-z0-9._:/-]+", values["openrouter_model"])):
+            raise ValueError("OpenRouter model kimliği geçersiz. Örn. openai/gpt-4o-mini")
         for key in ("announcement_channel_id", "game_announcement_channel_id", "designer_discord_id"):
             value = values[key]
             if value and (not value.isdigit() or not 15 <= len(value) <= 25):

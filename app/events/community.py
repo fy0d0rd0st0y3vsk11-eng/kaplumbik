@@ -382,6 +382,9 @@ class MahzenCommunity(commands.Cog):
                 item=db.session.execute(select(RewardShopItem).where(RewardShopItem.key==urun,RewardShopItem.enabled.is_(True))).scalar_one_or_none()
                 if not item:
                     await interaction.response.send_message("Ürün bulunamadı. Mağazayı kontrol et.",ephemeral=True); return
+                expired_rows=db.session.execute(select(MemberCollectionItem).where(MemberCollectionItem.discord_id==str(interaction.user.id),MemberCollectionItem.item_key==item.key,MemberCollectionItem.expires_at.is_not(None),MemberCollectionItem.expires_at<=utcnow())).scalars().all()
+                for expired_row in expired_rows: db.session.delete(expired_row)
+                db.session.flush()
                 existing=db.session.execute(select(MemberCollectionItem.id).where(MemberCollectionItem.discord_id==str(interaction.user.id),MemberCollectionItem.item_key==item.key, (MemberCollectionItem.expires_at.is_(None)) | (MemberCollectionItem.expires_at>utcnow()))).scalar_one_or_none()
                 if existing:
                     await interaction.response.send_message("Bu ürüne zaten sahipsin.",ephemeral=True); return

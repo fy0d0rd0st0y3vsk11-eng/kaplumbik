@@ -80,7 +80,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;bord
 </style></head><body>
 <header><div><h1>🐢 Kaplumbik</h1><div class="muted">Mahzen yönetim paneli</div></div>
 {% if logged_in %}<div><span class="muted">{{ username }}</span> <a class="button" href="{{ url_for('dashboard.logout') }}">Çıkış</a></div>{% endif %}</header>
-{% if logged_in %}<p style="max-width:1180px;margin:12px auto;padding:0 18px"><a href="{{ url_for('dashboard.community_settings') }}">Panel kişiselleştirme</a> · <a href="{{ url_for('dashboard.advanced_index') }}">Gelişmiş ayarlar · AI · duyurular · sağlık</a></p>{% endif %}
+{% if logged_in and is_owner %}<p style="max-width:1180px;margin:12px auto;padding:0 18px"><a href="{{ url_for('dashboard.community_settings') }}">Panel kişiselleştirme</a> · <a href="{{ url_for('dashboard.advanced_index') }}">Gelişmiş ayarlar · AI · duyurular · sağlık</a></p>{% elif logged_in %}<p style="max-width:1180px;margin:12px auto;padding:0 18px">Salt okunur Administrator görünümü</p>{% endif %}
 <main>
 {% for message in get_flashed_messages() %}<div class="flash">{{ message }}</div>{% endfor %}
 {% if not logged_in %}

@@ -210,6 +210,37 @@ class SecurityCog(commands.Cog):
     async def before_unverified_watch(self):
         await self.bot.wait_until_ready()
 
+
+    @app_commands.command(name="denetimlogu",description="Son güvenlik ve yönetim denetim kayıtlarını göster (yönetici).")
+    async def audit_history(self,interaction:discord.Interaction):
+        if not admin(interaction):
+            await interaction.response.send_message("Denetim kayıtları yalnızca sunucu sahibi veya Administrator yetkilisine açık.",ephemeral=True); return
+        app=create_app()
+        with app.app_context():
+            rows=db.session.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(12)).scalars().all()
+            snapshot=[(row.action,row.actor_discord_id,row.target_type,row.target_id,row.created_at,row.success) for row in rows]
+        lines=[]
+        for action,actor,target_type,target_id,created,success in snapshot:
+            if created.tzinfo is None: created=created.replace(tzinfo=timezone.utc)
+            lines.append(f"{'OK' if success else 'HATA'} · {action} · yetkili {actor or 'sistem'} · {target_type or '-'}:{target_id or '-'} · <t:{int(created.timestamp())}:R>")
+        await interaction.response.send_message("Son denetim kayıtları\n"+("\n".join(lines) if lines else "Henüz kayıt yok."),ephemeral=True)
+
+    @app_commands.command(name="davet",description="Yönetici tarafından sınırlı süreli sunucu daveti oluştur.")
+    async def create_invite(self,interaction:discord.Interaction,kanal:discord.TextChannel,sure_saat:app_commands.Range[int,1,168]=24,kullanim:app_commands.Range[int,1,100]=10):
+        if not admin(interaction):
+            await interaction.response.send_message("Davet oluşturmak yalnızca sunucu sahibi veya Administrator yetkilisine açık.",ephemeral=True); return
+        permissions=kanal.permissions_for(interaction.guild.me) if interaction.guild and interaction.guild.me else None
+        if permissions is None or not permissions.create_instant_invite:
+            await interaction.response.send_message("Botun bu kanalda Davet Oluştur izni yok.",ephemeral=True); return
+        try:
+            invite=await kanal.create_invite(max_age=int(sure_saat)*3600,max_uses=int(kullanim),unique=True,reason=f"Kaplumbik invite requested by {interaction.user}")
+            app=create_app()
+            with app.app_context():
+                db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="security.invite_created",target_type="channel",target_id=str(kanal.id),details={"max_age_hours":int(sure_saat),"max_uses":int(kullanim)},success=True)); db.session.commit()
+            await interaction.response.send_message(f"Sınırlı davet oluşturuldu: {invite.url}\nSüre: {sure_saat} saat · kullanım: {kullanim}.",ephemeral=True)
+        except discord.HTTPException:
+            await interaction.response.send_message("Davet oluşturulamadı. Botun kanal izinlerini kontrol et.",ephemeral=True)
+
     @app_commands.command(name="guvenlikrolleri",description="Doğrulama, üye, kısıtlı ve yardımcı rollerini ayarla (yalnızca sahip).")
     async def configure_roles(self,interaction:discord.Interaction,dogrulanmamis:discord.Role,uye:discord.Role,kisitli:discord.Role,yardimci:discord.Role,kanal:discord.TextChannel):
         if not owner(interaction):

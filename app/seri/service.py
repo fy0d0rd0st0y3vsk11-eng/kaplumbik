@@ -1,11 +1,11 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.exc import IntegrityError
 
 from app.database import db
 from app.database.advanced_models import BotSetting
-from app.database.models import AuditLog
+from app.database.models import AuditLog, UserProfile, EconomyTransaction
 from app.seri.models import StreakContribution, StreakDay
 
 GOAL = 3
@@ -82,6 +82,40 @@ def latest_streak_length() -> int:
     return streak
 
 
+
+def _award_day_contributors(day_row: StreakDay, actor_discord_id: str = "kaplumbik") -> int:
+    """Award configured shared-streak points once per contributor in the same DB transaction."""
+    if contribution_count(day_row) < GOAL:
+        return 0
+    setting = db.session.get(BotSetting, "streak_reward_points")
+    try:
+        reward = max(0, min(1000, int(setting.value if setting else "5")))
+    except (TypeError, ValueError):
+        reward = 5
+    if reward == 0:
+        return 0
+    awarded = 0
+    for discord_id in contributor_ids(day_row):
+        key = f"streak-reward:{day_row.day}:{discord_id}"
+        existing = db.session.execute(select(EconomyTransaction.id).where(EconomyTransaction.idempotency_key == key)).scalar_one_or_none()
+        if existing is not None:
+            continue
+        profile = db.session.execute(select(UserProfile).where(UserProfile.discord_id == discord_id)).scalar_one_or_none()
+        if profile is None:
+            profile = UserProfile(discord_id=discord_id, balance=0)
+            db.session.add(profile)
+            db.session.flush()
+        db.session.execute(update(UserProfile).where(UserProfile.discord_id == discord_id).values(balance=UserProfile.balance + reward))
+        profile = db.session.execute(select(UserProfile).where(UserProfile.discord_id == discord_id)).scalar_one()
+        db.session.add(EconomyTransaction(
+            user_id=profile.id, amount=reward, balance_after=profile.balance,
+            transaction_type="shared_streak_reward", description=f"Mahzen ortak seri ödülü: {day_row.day}",
+            actor_discord_id=str(actor_discord_id), reference_type="streak_day", reference_id=day_row.day,
+            idempotency_key=key,
+        ))
+        awarded += 1
+    return awarded
+
 def close_day(day: date, actor_discord_id: str | None = None) -> tuple[StreakDay, bool]:
     row = get_or_create_day(day)
     if row.status != "open":
@@ -98,9 +132,10 @@ def close_day(day: date, actor_discord_id: str | None = None) -> tuple[StreakDay
         row.status = "pending"
         row.streak_after = latest_streak_length()
     row.closed_at = datetime.now(timezone.utc)
+    rewarded_members = _award_day_contributors(row, actor_discord_id or "kaplumbik") if row.status == "completed" else 0
     db.session.add(AuditLog(
         actor_discord_id=actor_discord_id, action="streak.day_closed", target_type="streak_day",
-        target_id=row.day, details={"status": row.status, "contributors": count, "goal": GOAL}, success=True,
+        target_id=row.day, details={"status": row.status, "contributors": count, "goal": GOAL, "rewarded_members": rewarded_members}, success=True,
     ))
     db.session.commit()
     return row, True
@@ -116,6 +151,7 @@ def make_up_pending_days(count: int, actor_discord_id: str) -> list[StreakDay]:
     for row in rows:
         row.status = "forgiven"
         row.streak_after = 0  # Recomputed below from chronological history.
+        _award_day_contributors(row, actor_discord_id)
     ordered = list(db.session.execute(select(StreakDay).where(
         StreakDay.status.in_(["completed", "forgiven"])
     ).order_by(StreakDay.day.asc())).scalars())

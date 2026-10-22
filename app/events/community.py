@@ -12,9 +12,9 @@ from sqlalchemy.exc import IntegrityError
 from app import create_app
 from app.core.config import settings
 from app.database import db
-from app.database.community_models import MemberGameProfile, CommunityPoll, CommunityPollVote, CommunitySuggestion, CommunitySuggestionVote, WeeklyQuest, WeeklyQuestProgress, RewardShopItem, MemberCollectionItem, FeaturePermission
+from app.database.community_models import MemberGameProfile, CommunityPoll, CommunityPollVote, CommunitySuggestion, CommunitySuggestionVote, WeeklyQuest, WeeklyQuestProgress, RewardShopItem, MemberCollectionItem, FeaturePermission, ServerMemoryProposal
 from app.database.models import AuditLog, EconomyTransaction, UserProfile
-from app.events.feature_service import get_setting
+from app.events.feature_service import get_setting, set_setting
 
 log = logging.getLogger("kaplumbik.community")
 TR = ZoneInfo("Europe/Istanbul")
@@ -80,6 +80,37 @@ class MahzenCommunity(commands.Cog):
         if not self.expire_shop_items.is_running(): self.expire_shop_items.start()
     def cog_unload(self): self.expire_shop_items.cancel()
 
+
+
+    @app_commands.command(name="sunucuhafizaoner", description="Mahzen için ortak bilgi öner; yönetici onaylamadan AI hafızasına eklenmez.")
+    async def propose_server_memory(self, interaction: discord.Interaction, bilgi: app_commands.Range[str,10,1000]):
+        if not interaction.guild_id:
+            await interaction.response.send_message("Bu komut yalnızca sunucuda kullanılabilir.",ephemeral=True); return
+        app=create_app()
+        with app.app_context():
+            row=ServerMemoryProposal(guild_id=str(interaction.guild_id),proposer_id=str(interaction.user.id),content=bilgi.strip(),status="pending")
+            db.session.add(row); db.session.commit(); proposal_id=row.id
+        await interaction.response.send_message(f"Ortak bilgi önerin #{proposal_id} olarak kaydedildi. Yönetici inceleyip onaylamadan AI tarafından doğrulanmış bilgi sayılmaz. Kişisel veya hassas bilgi ekleme.",ephemeral=True)
+
+    @app_commands.command(name="sunucuhafizayonet", description="Ortak bilgi önerisini onayla veya reddet (yönetici).")
+    @app_commands.choices(karar=[app_commands.Choice(name="Onayla ve ekle",value="approved"),app_commands.Choice(name="Reddet",value="rejected")])
+    async def review_server_memory(self, interaction: discord.Interaction, onerino: int, karar: app_commands.Choice[str]):
+        if not can_manage_module(interaction,"ai"):
+            await interaction.response.send_message("AI/ortak hafıza yönetimi izni gerekiyor.",ephemeral=True); return
+        app=create_app()
+        with app.app_context():
+            proposal=db.session.get(ServerMemoryProposal,onerino)
+            if not proposal or proposal.status!="pending":
+                await interaction.response.send_message("Bekleyen öneri bulunamadı veya daha önce incelendi.",ephemeral=True); return
+            if karar.value=="approved":
+                current=get_setting("server_knowledge","").strip()
+                addition=f"\n- Yönetici onaylı ortak bilgi (öneri #{proposal.id}, {datetime.now(TR).strftime('%Y-%m-%d')}): {proposal.content}"
+                if len(current)+len(addition)>8000:
+                    await interaction.response.send_message("Sunucu bilgi alanı dolu. Önce panelden eski bilgileri düzenle.",ephemeral=True); return
+                set_setting("server_knowledge",current+addition,str(interaction.user.id))
+            proposal.status=karar.value; proposal.reviewed_by=str(interaction.user.id); proposal.reviewed_at=utcnow()
+            db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.server_memory_review",target_type="server_memory_proposal",target_id=str(proposal.id),details={"decision":karar.value},success=True)); db.session.commit()
+        await interaction.response.send_message(f"Ortak bilgi önerisi #{onerino}: {karar.name}.",ephemeral=True)
 
     @app_commands.command(name="takvim", description="Önümüzdeki 7 günün Mahzen etkinlik takvimini göster.")
     async def event_calendar(self, interaction: discord.Interaction):

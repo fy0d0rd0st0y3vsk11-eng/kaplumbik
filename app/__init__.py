@@ -54,14 +54,15 @@ def create_app(test_config=None):
     def enforce_dashboard_maintenance():
         if not request.path.startswith("/dashboard"):
             return None
+        if request.path in {"/dashboard/", "/dashboard/login", "/dashboard/callback", "/dashboard/logout"}:
+            return None
         current_id = str(session.get("discord_id", ""))
         if settings.owner_discord_id and current_id == str(settings.owner_discord_id):
             return None
         from app.database import db
         from app.database.advanced_models import BotSetting
-        with app.app_context():
-            setting = db.session.get(BotSetting, "maintenance_mode")
-            enabled = bool(setting and setting.value.casefold() == "true")
+        setting = db.session.get(BotSetting, "maintenance_mode")
+        enabled = bool(setting and setting.value.casefold() == "true")
         if enabled:
             return {"status": "maintenance", "message": "Kaplumbik paneli bakımda. Lütfen daha sonra tekrar dene."}, 503
         return None

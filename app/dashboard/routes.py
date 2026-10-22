@@ -62,7 +62,7 @@ PAGE = """
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }} · Kaplumbik</title>
 <style>
-:root{color-scheme:dark;--bg:#101117;--panel:#191b25;--line:#303342;--text:#f4f4f8;--muted:#a8a9bb;--accent:#a78bfa;--good:#86efac;--bad:#fca5a5}
+:root{color-scheme:light;--bg:#f5f3eb;--panel:#fffdf7;--line:#d9dfd0;--text:#30382f;--muted:#737d70;--accent:#7b9271;--good:#4f7657;--bad:#b65b52}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,sans-serif}
 header{padding:22px max(18px,calc((100% - 1180px)/2));border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px}
 main{max-width:1180px;margin:26px auto;padding:0 18px 48px}h1{font-size:26px;margin:0}h2{font-size:18px;margin:0 0 14px}p,.muted{color:var(--muted)}a{color:#c4b5fd}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px}

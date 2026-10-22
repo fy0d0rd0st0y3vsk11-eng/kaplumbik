@@ -220,8 +220,13 @@ def test_kaplumbik_meme_triggers_are_deterministic():
 
 def test_conversation_memory_persists_and_isolates_members(assistant_app, monkeypatch):
     from app.database.advanced_models import ConversationMemory
+    from app.database.community_models import AIMemoryPreference
 
     monkeypatch.setattr(assistant_features, "create_app", lambda: assistant_app)
+    with assistant_app.app_context():
+        for guild_id, member_id in [("guild-1","member-1"),("guild-1","member-2"),("guild-2","member-1")]:
+            db.session.add(AIMemoryPreference(guild_id=guild_id,discord_id=member_id,enabled=True))
+        db.session.commit()
     assistant_features._save_conversation_memory(
         "guild-1", "channel-1", "member-1", "Fedya", "user", "Dün Among Us oynadık."
     )
@@ -247,8 +252,12 @@ def test_conversation_memory_persists_and_isolates_members(assistant_app, monkey
 
 def test_conversation_memory_ignores_empty_and_truncates_long_messages(assistant_app, monkeypatch):
     from app.database.advanced_models import ConversationMemory
+    from app.database.community_models import AIMemoryPreference
 
     monkeypatch.setattr(assistant_features, "create_app", lambda: assistant_app)
+    with assistant_app.app_context():
+        db.session.add(AIMemoryPreference(guild_id="guild-1",discord_id="member-1",enabled=True))
+        db.session.commit()
     assistant_features._save_conversation_memory("guild-1", "channel-1", "member-1", "Fedya", "user", "   ")
     assistant_features._save_conversation_memory(
         "guild-1", "channel-1", "member-1", "Fedya", "user", "x" * 4000

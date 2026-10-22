@@ -126,3 +126,12 @@ class ServerMemoryProposal(db.Model):
     reviewed_by=db.Column(db.String(25),nullable=True)
     created_at=db.Column(db.DateTime(timezone=True),nullable=False,default=utc_now)
     reviewed_at=db.Column(db.DateTime(timezone=True),nullable=True)
+
+class AIMemoryPreference(db.Model):
+    __tablename__ = "ai_memory_preferences"
+    id=db.Column(db.Integer,primary_key=True)
+    guild_id=db.Column(db.String(25),nullable=False)
+    discord_id=db.Column(db.String(25),nullable=False)
+    enabled=db.Column(db.Boolean,nullable=False,default=False)
+    updated_at=db.Column(db.DateTime(timezone=True),nullable=False,default=utc_now,onupdate=utc_now)
+    __table_args__=(db.UniqueConstraint("guild_id","discord_id",name="uq_ai_memory_preference"),)

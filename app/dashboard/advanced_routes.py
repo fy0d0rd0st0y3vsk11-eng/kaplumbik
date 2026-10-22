@@ -278,6 +278,8 @@ def community_settings_save():
     set_setting("streak_channel_id",output_channel,actor)
     set_setting("streak_source_channel_ids",",".join(dict.fromkeys(source_ids)),actor)
     set_setting("streak_reward_points",str(streak_reward_points),actor)
+    from app.seri.service import ensure_tracking_started_date
+    ensure_tracking_started_date(actor)
     set_setting("maintenance_mode","true" if request.form.get("maintenance_mode")=="true" else "false",actor)
     db.session.add(AuditLog(actor_discord_id=actor,action="dashboard.customization",target_type="dashboard",target_id="community",details={"theme":theme,"cards":cards,"maintenance_mode":request.form.get("maintenance_mode")=="true","streak_channel_id":output_channel,"streak_source_channel_ids":source_ids,"streak_reward_points":streak_reward_points},success=True))
     db.session.commit()

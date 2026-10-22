@@ -274,3 +274,25 @@ def test_personal_memory_is_off_until_member_opts_in(assistant_app, monkeypatch)
     assert assistant_features._load_conversation_memory("guild-1","member-1","anything") == ""
     with assistant_app.app_context():
         assert ConversationMemory.query.count() == 0
+
+def test_ai_request_uses_dashboard_model_override_and_logs_usage(assistant_app, monkeypatch):
+    from app.database.advanced_models import BotHealthRecord
+    install_settings(monkeypatch, model="env/model")
+    monkeypatch.setattr(assistant_features, "create_app", lambda: assistant_app)
+    with assistant_app.app_context():
+        set_setting("openrouter_model", "dashboard/model")
+    captured={}
+    def fake_post(url, **kwargs):
+        captured.update(kwargs)
+        return FakeResponse({
+            "choices":[{"message":{"content":"Test yanıtı"}}],
+            "usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"cost":0.0002},
+        })
+    monkeypatch.setattr(assistant_features.requests, "post", fake_post)
+    assert assistant_features._ai_request("Test", "") == "Test yanıtı"
+    assert captured["json"]["model"] == "dashboard/model"
+    with assistant_app.app_context():
+        row=BotHealthRecord.query.filter_by(component="ai_usage",status="ok").one()
+        assert "model=dashboard/model" in row.details
+        assert "total_tokens=15" in row.details
+        assert "cost=0.0002" in row.details

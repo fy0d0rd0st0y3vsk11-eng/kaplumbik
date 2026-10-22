@@ -143,6 +143,67 @@ SETTING_KEYS = (
 )
 
 
+
+COMMUNITY_SETTINGS_PAGE = """
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kaplumbik · Topluluk ayarları</title>
+<style>
+:root{color-scheme:light;--bg:#f5f3eb;--panel:#fffdf7;--line:#d9dfd0;--text:#30382f;--muted:#737d70;--accent:#7b9271}
+body{font:15px/1.55 system-ui,sans-serif;background:var(--bg);color:var(--text);max-width:900px;margin:28px auto;padding:0 18px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin:16px 0}
+label{display:block;margin:12px 0 5px;color:var(--muted)}input,select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:9px;width:100%;background:white;color:var(--text)}
+button,.button{display:inline-block;background:var(--accent);color:#172018;border:0;border-radius:9px;padding:10px 14px;margin-top:12px;text-decoration:none;font-weight:700}
+small,.muted{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.check{display:flex;gap:9px;align-items:center}.check input{width:auto}
+</style></head><body><h1>🐢 Kaplumbik · Panel kişiselleştirme</h1><p class="muted">Görünüm, ana sayfa kartları ve bakım modu. Bu ayarlar güvenlik izinlerinin yerine geçmez.</p>
+<a class="button" href="{{ url_for('dashboard.index') }}">Ana sayfa</a> <a class="button" href="{{ url_for('dashboard.advanced_index') }}">Gelişmiş ayarlar</a>
+{% for message in get_flashed_messages() %}<section>{{ message }}</section>{% endfor %}
+<section><form method="post" action="{{ url_for('dashboard.community_settings_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<h2>Görünüm</h2><label>Panel teması</label><select name="theme"><option value="sage" {% if theme=='sage' %}selected{% endif %}>Krem + adaçayı</option><option value="latte" {% if theme=='latte' %}selected{% endif %}>Latte + bej</option><option value="dark" {% if theme=='dark' %}selected{% endif %}>Koyu</option></select>
+<h2>Ana sayfa kartları</h2><div class="cards">
+{% for key,label in card_options %}<label class="check"><input type="checkbox" name="cards" value="{{ key }}" {% if key in cards %}checked{% endif %}>{{ label }}</label>{% endfor %}
+</div>
+<h2>Öneri kutusu</h2><label>Önerilerin yayımlanacağı kanal ID'si (boşsa komutun kullanıldığı kanal)</label><input name="suggestion_channel_id" inputmode="numeric" value="{{ suggestion_channel_id }}">
+<h2>Bakım modu</h2><label class="check"><input type="checkbox" name="maintenance_mode" value="true" {% if maintenance_mode %}checked{% endif %}>Paneli bakım moduna al (sunucu sahibi yine erişebilir)</label>
+<button type="submit">Ayarları kaydet</button></form></section>
+<section><h2>Güvenlik notu</h2><p>Paneldeki kritik yönetim işlemleri şu an sunucu sahibiyle sınırlı. Modül izinlerini kaydetmek tek başına erişim izni vermemeli; izin kontrolü her işlemde ayrıca uygulanmalı. Bakım modu yalnızca web panelini etkiler, Discord botunu durdurmaz.</p></section>
+</body></html>
+"""
+
+@dashboard_bp.get("/community")
+@owner_required
+def community_settings():
+    from app.events.feature_service import get_setting
+    return render_template_string(COMMUNITY_SETTINGS_PAGE, csrf_token=session.get("csrf_token",""),
+        theme=get_setting("dashboard_theme","sage"),
+        cards=[x for x in get_setting("dashboard_home_cards","overview,events,economy,security,streak,ai").split(",") if x],
+        card_options=[("overview","Genel bakış"),("events","Etkinlikler"),("economy","Puanlar ve mağaza"),("security","Güvenlik"),("streak","Ortak seri"),("ai","AI kontrol merkezi")],
+        suggestion_channel_id=get_setting("suggestion_channel_id",""),
+        maintenance_mode=get_setting("maintenance_mode","false").casefold()=="true")
+
+@dashboard_bp.post("/community")
+@owner_required
+def community_settings_save():
+    _require_csrf()
+    from app.events.feature_service import get_setting, set_setting
+    theme=request.form.get("theme","sage")
+    if theme not in {"sage","latte","dark"}:
+        flash("Tema seçimi geçersiz."); return redirect(url_for("dashboard.community_settings"))
+    allowed={"overview","events","economy","security","streak","ai"}
+    cards=[x for x in request.form.getlist("cards") if x in allowed]
+    channel=request.form.get("suggestion_channel_id","").strip()
+    if channel and not channel.isdigit():
+        flash("Öneri kanalı Discord kanal ID'si olmalı."); return redirect(url_for("dashboard.community_settings"))
+    actor=str(session["discord_id"])
+    set_setting("dashboard_theme",theme,actor)
+    set_setting("dashboard_home_cards",",".join(dict.fromkeys(cards)),actor)
+    set_setting("suggestion_channel_id",channel,actor)
+    set_setting("maintenance_mode","true" if request.form.get("maintenance_mode")=="true" else "false",actor)
+    db.session.add(AuditLog(actor_discord_id=actor,action="dashboard.customization",target_type="dashboard",target_id="community",details={"theme":theme,"cards":cards,"maintenance_mode":request.form.get("maintenance_mode")=="true"},success=True))
+    db.session.commit()
+    flash("Panel ayarları kaydedildi.")
+    return redirect(url_for("dashboard.community_settings"))
+
+
 @dashboard_bp.get("/advanced")
 @owner_required
 def advanced_index():

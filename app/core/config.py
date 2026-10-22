@@ -10,6 +10,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
 
+def _database_url():
+    value = os.getenv("DATABASE_URL", "sqlite:///kaplumbik.db").strip()
+    if value.startswith("postgres://"):
+        return "postgresql+psycopg://" + value[len("postgres://"):]
+    if value.startswith("postgresql://"):
+        return "postgresql+psycopg://" + value[len("postgresql://"):]
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str = os.getenv("APP_ENV", "development")
@@ -26,10 +35,7 @@ class Settings:
         "http://127.0.0.1:5000/dashboard/callback",
     )
 
-    database_url: str = os.getenv(
-        "DATABASE_URL",
-        "sqlite:///kaplumbik.db",
-    )
+    database_url: str = _database_url()
 
     openrouter_api_key: str = os.getenv(
         "OPENROUTER_API_KEY", ""

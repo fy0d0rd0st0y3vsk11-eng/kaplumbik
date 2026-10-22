@@ -324,6 +324,10 @@ def owner_2fa():
         return redirect(url_for("dashboard.login"))
     if request.method == "POST":
         _require_csrf()
+        attempts = int(session.get("totp_attempts", 0))
+        if attempts >= 5:
+            session.clear()
+            abort(429, description="Çok fazla hatalı doğrulama. Discord ile yeniden giriş yap.")
         code = request.form.get("code", "").strip().replace(" ", "")
         try:
             import pyotp
@@ -332,6 +336,10 @@ def owner_2fa():
             logger.exception("Owner TOTP validation failed")
             valid = False
         if not valid:
+            session["totp_attempts"] = attempts + 1
+            if attempts + 1 >= 5:
+                session.clear()
+                abort(429, description="Çok fazla hatalı doğrulama. Discord ile yeniden giriş yap.")
             flash("Doğrulama kodu geçersiz veya süresi dolmuş.")
             return redirect(url_for("dashboard.owner_2fa"))
         username = session.get("pending_2fa_username", "Yönetici")

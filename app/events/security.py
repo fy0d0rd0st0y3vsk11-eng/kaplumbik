@@ -203,6 +203,14 @@ class SecurityCog(commands.Cog):
                         if setting(key,"")!="sent":
                             set_setting(key,"sent")
                             pending.append((member.guild.name,member.id))
+        if pending:
+            app=create_app()
+            with app.app_context(): alert_channel_id=setting("security_alert_channel_id","")
+            alert_channel=self.bot.get_channel(int(alert_channel_id)) if alert_channel_id.isdigit() else None
+            if alert_channel:
+                body="⏰ **24 saati geçen doğrulanmamış üyeler**\n"+"\n".join(f"• {guild_name} · Discord ID {member_id}" for guild_name,member_id in pending[:20])
+                try: await alert_channel.send(body[:1900],allowed_mentions=discord.AllowedMentions.none())
+                except discord.HTTPException: log.exception("Could not post unverified member alerts to channel.")
         for guild_name,member_id in pending:
             await self.alert_owner(f"⏰ Doğrulanmamış üye 24 saati geçti: {guild_name} · Discord ID {member_id}.")
 
@@ -242,7 +250,7 @@ class SecurityCog(commands.Cog):
             await interaction.response.send_message("Davet oluşturulamadı. Botun kanal izinlerini kontrol et.",ephemeral=True)
 
     @app_commands.command(name="guvenlikrolleri",description="Doğrulama, üye, kısıtlı ve yardımcı rollerini ayarla (yalnızca sahip).")
-    async def configure_roles(self,interaction:discord.Interaction,dogrulanmamis:discord.Role,uye:discord.Role,kisitli:discord.Role,yardimci:discord.Role,kanal:discord.TextChannel):
+    async def configure_roles(self,interaction:discord.Interaction,dogrulanmamis:discord.Role,uye:discord.Role,kisitli:discord.Role,yardimci:discord.Role,kanal:discord.TextChannel,uyari_kanali:discord.TextChannel|None=None):
         if not owner(interaction):
             await interaction.response.send_message("Bu güvenlik yapılandırması yalnızca sunucu sahibine açık.",ephemeral=True); return
         if interaction.guild and interaction.guild.me:
@@ -256,6 +264,7 @@ class SecurityCog(commands.Cog):
             set_setting("restricted_role_id",str(kisitli.id),interaction.user.id)
             set_setting("helper_role_id",str(yardimci.id),interaction.user.id)
             set_setting("verification_channel_id",str(kanal.id),interaction.user.id)
+            if uyari_kanali: set_setting("security_alert_channel_id",str(uyari_kanali.id),interaction.user.id)
             set_setting("security_guild_ids",str(interaction.guild_id),interaction.user.id)
         await interaction.response.send_message("Doğrulama ve güvenlik rolleri kaydedildi. Botun Rol Yönetimi izni ve rol hiyerarşisini doğrula.",ephemeral=True)
 

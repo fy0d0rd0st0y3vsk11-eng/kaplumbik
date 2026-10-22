@@ -258,6 +258,22 @@ class MahzenCommunity(commands.Cog):
                 row=db.session.get(CommunityPoll,poll_id); row.status="failed"; db.session.commit()
             await interaction.followup.send("Anket mesajı gönderilemedi. Botun kanal izinlerini kontrol edin.",ephemeral=True)
 
+
+    @app_commands.command(name="anketsonuc", description="Bir anketin oy sayılarını göster.")
+    async def poll_results(self, interaction: discord.Interaction, anketno: int):
+        app=create_app()
+        with app.app_context():
+            poll=db.session.get(CommunityPoll,anketno)
+            if not poll:
+                await interaction.response.send_message("Anket bulunamadı.",ephemeral=True); return
+            if poll.ends_at and poll.ends_at<=utcnow() and poll.status=="open":
+                poll.status="closed"; db.session.commit()
+            counts=[db.session.scalar(select(func.count(CommunityPollVote.id)).where(CommunityPollVote.poll_id==poll.id,CommunityPollVote.option_index==idx)) or 0 for idx,_ in enumerate(poll.options)]
+            total=sum(counts)
+            question=poll.question; options=list(poll.options); status=poll.status
+        lines=[f"{option}: **{count}** oy ({round(count*100/total) if total else 0}%)" for option,count in zip(options,counts)]
+        await interaction.response.send_message(f"📊 **Anket #{anketno}: {question}** · durum: {status}\nToplam oy: {total}\n"+"\n".join(lines),ephemeral=False,allowed_mentions=discord.AllowedMentions.none())
+
     @app_commands.command(name="onerigonder", description="Anonim veya isimli öneri gönder.")
     async def suggestion_submit(self, interaction: discord.Interaction, metin: app_commands.Range[str,10,1500], anonim: bool=False):
         if not interaction.guild_id:

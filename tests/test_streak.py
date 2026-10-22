@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -99,4 +100,4 @@ def test_streak_tracking_starts_only_after_both_channel_settings(app):
         set_source_channel("400", True, "owner")
         row = db.session.get(BotSetting, "streak_tracking_started_date")
         assert row is not None
-        assert row.value == date.today().isoformat() or len(row.value) == 10
+        assert row.value == datetime.now(ZoneInfo("Europe/Istanbul")).date().isoformat()

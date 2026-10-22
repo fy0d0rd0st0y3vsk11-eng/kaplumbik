@@ -211,6 +211,8 @@ def create_streak_channel():
             raise ValueError("Discord kanal yanıtında geçerli bir kanal ID'si yok.")
         actor = str(session["discord_id"])
         set_setting("streak_channel_id", channel_id, actor)
+        from app.seri.service import ensure_tracking_started_date
+        ensure_tracking_started_date(actor)
         db.session.add(AuditLog(
             actor_discord_id=actor,
             action="dashboard.streak_channel_create_or_select",

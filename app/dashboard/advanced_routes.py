@@ -32,7 +32,7 @@ def _local_time(value, fmt="%d.%m.%Y %H:%M"):
 SETTINGS_PAGE = """
 <!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kaplumbik gelişmiş ayarlar</title>
 <style>
-:root{color-scheme:dark;--bg:#0b0c13;--panel:#151725;--line:#30354c;--accent:#b6a0ff;--mint:#9ee7d7;--text:#f5f3ff;--muted:#aaaec4}
+:root{color-scheme:light;--bg:#f5f3eb;--panel:#fffdf7;--line:#d9dfd0;--accent:#7b9271;--mint:#a6b99a;--text:#30382f;--muted:#737d70}
 *{box-sizing:border-box}body{font:15px/1.55 system-ui,-apple-system,sans-serif;background:radial-gradient(ellipse at 15% 0%,#292044 0,transparent 42%),radial-gradient(ellipse at 95% 12%,#153b3a 0,transparent 36%),var(--bg);color:var(--text);max-width:1120px;margin:26px auto;padding:0 16px 100px}
 h1{font-size:clamp(26px,4vw,38px);letter-spacing:-.04em;margin:12px 0 4px}h2{font-size:19px;margin:0 0 10px}section{background:linear-gradient(145deg,rgba(27,30,48,.96),rgba(17,19,31,.96));border:1px solid var(--line);border-radius:20px;padding:clamp(16px,3vw,25px);margin:17px 0;box-shadow:0 12px 32px #0002}
 label{display:block;color:#d1cde5;margin-top:12px;font-size:13px;font-weight:650}input,textarea,select{width:100%;padding:12px 13px;margin-top:5px;background:#0d0f19;color:var(--text);border:1px solid #3b3f59;border-radius:11px;font:inherit;outline:none}input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #b6a0ff20}textarea{min-height:100px;resize:vertical}

@@ -222,6 +222,116 @@ class MahzenCommunity(commands.Cog):
             db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="permissions.module_role",target_type="module",target_id=modul,details={"role_id":str(rol.id),"can_manage":yonetebilir},success=True)); db.session.commit()
         await interaction.response.send_message(f"{rol.name} rolünün {modul} izni güncellendi. Discord'un yerleşik izinleri yine geçerlidir.",ephemeral=True)
 
+
+    async def cog_load(self):
+        app=create_app()
+        with app.app_context():
+            polls=db.session.execute(select(CommunityPoll).where(CommunityPoll.status=="open")).scalars().all()
+            active=[(p.id,list(p.options),p.message_id) for p in polls]
+        for poll_id,options,message_id in active:
+            try:
+                self.bot.add_view(PollView(poll_id,options), message_id=int(message_id) if message_id else None)
+            except (ValueError, discord.HTTPException):
+                log.exception("Could not restore persistent poll view %s",poll_id)
+
+    @app_commands.command(name="goreval", description="Tamamladığın haftalık görevin puanını al.")
+    async def claim_quest(self, interaction: discord.Interaction, gorev: int):
+        app=create_app()
+        try:
+            with app.app_context():
+                quest=db.session.get(WeeklyQuest,gorev)
+                if not quest or not quest.enabled or quest.ends_at<=utcnow():
+                    await interaction.response.send_message("Görev bulunamadı veya süresi bitti.",ephemeral=True); return
+                progress=db.session.execute(select(WeeklyQuestProgress).where(WeeklyQuestProgress.quest_id==quest.id,WeeklyQuestProgress.discord_id==str(interaction.user.id))).scalar_one_or_none()
+                if quest.quest_type=="shared_members":
+                    total=db.session.scalar(select(func.count(WeeklyQuestProgress.id)).where(WeeklyQuestProgress.quest_id==quest.id,WeeklyQuestProgress.progress>0)) or 0
+                    completed=total>=quest.target and progress is not None and progress.progress>0
+                else:
+                    completed=progress is not None and progress.progress>=quest.target
+                if not completed:
+                    await interaction.response.send_message("Görev henüz tamamlanmadı.",ephemeral=True); return
+                if progress.claimed_at:
+                    await interaction.response.send_message("Bu görevin ödülünü zaten aldın.",ephemeral=True); return
+                adjust_balance(str(interaction.user.id),int(quest.reward_points),"weekly_quest",f"Haftalık görev: {quest.title}",actor_discord_id="kaplumbik",idempotency_key=f"quest:{quest.id}:{interaction.user.id}")
+                progress.claimed_at=utcnow()
+                db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="quest.reward_claimed",target_type="quest",target_id=str(quest.id),details={"reward":quest.reward_points},success=True))
+                db.session.commit()
+            await interaction.response.send_message(f"Görev ödülü alındı: {quest.reward_points} puan.",ephemeral=True)
+        except Exception:
+            db.session.rollback(); log.exception("Quest reward claim failed")
+            if not interaction.response.is_done(): await interaction.response.send_message("Ödül alınamadı. İşlem kaydı kontrol edilmeli; aynı ödül ikinci kez verilmez.",ephemeral=True)
+
+    @app_commands.command(name="dukkanurunekle", description="Mağazaya ürün ekle (yönetici).")
+    async def add_shop_item(self, interaction: discord.Interaction, anahtar: str, baslik: str, fiyat: app_commands.Range[int,0,1000000], aciklama: str, tur: str="cosmetic", rol: discord.Role | None=None, sure_gun: app_commands.Range[int,1,3650] | None=None):
+        if not is_admin(interaction):
+            await interaction.response.send_message("Yönetici yetkisi gerekiyor.",ephemeral=True); return
+        if not anahtar.replace("_","").replace("-","").isalnum() or len(anahtar)>80 or len(baslik)>120 or len(aciklama)>300 or tur not in {"cosmetic","role","badge","collection"}:
+            await interaction.response.send_message("Ürün alanları geçersiz.",ephemeral=True); return
+        if tur=="role" and rol is None:
+            await interaction.response.send_message("Rol ürünü için Discord rolü seçilmeli.",ephemeral=True); return
+        if rol and interaction.guild and interaction.guild.me and rol >= interaction.guild.me.top_role:
+            await interaction.response.send_message("Botun rol hiyerarşisi bu rolü veremiyor.",ephemeral=True); return
+        app=create_app()
+        with app.app_context():
+            existing=db.session.execute(select(RewardShopItem.id).where(RewardShopItem.key==anahtar)).scalar_one_or_none()
+            if existing:
+                await interaction.response.send_message("Bu ürün anahtarı zaten kullanılıyor.",ephemeral=True); return
+            db.session.add(RewardShopItem(key=anahtar,title=baslik.strip(),description=aciklama.strip(),item_type=tur,price=int(fiyat),discord_role_id=str(rol.id) if rol else None,duration_days=int(sure_gun) if sure_gun else None,enabled=True))
+            db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="shop.item_created",target_type="shop_item",target_id=anahtar,details={"price":int(fiyat),"type":tur},success=True))
+            db.session.commit()
+        await interaction.response.send_message(f"Mağaza ürünü eklendi: {baslik} ({fiyat} puan).",ephemeral=True)
+
+    @app_commands.command(name="dukkanal", description="Mağazadan bir koleksiyon ürünü satın al.")
+    async def buy_shop_item(self, interaction: discord.Interaction, urun: str):
+        app=create_app(); added_role=None
+        try:
+            with app.app_context():
+                item=db.session.execute(select(RewardShopItem).where(RewardShopItem.key==urun,RewardShopItem.enabled.is_(True))).scalar_one_or_none()
+                if not item:
+                    await interaction.response.send_message("Ürün bulunamadı. Mağazayı kontrol et.",ephemeral=True); return
+                existing=db.session.execute(select(MemberCollectionItem.id).where(MemberCollectionItem.discord_id==str(interaction.user.id),MemberCollectionItem.item_key==item.key, (MemberCollectionItem.expires_at.is_(None)) | (MemberCollectionItem.expires_at>utcnow()))).scalar_one_or_none()
+                if existing:
+                    await interaction.response.send_message("Bu ürüne zaten sahipsin.",ephemeral=True); return
+                profile=db.session.execute(select(UserProfile).where(UserProfile.discord_id==str(interaction.user.id))).scalar_one_or_none()
+                if not profile:
+                    profile=UserProfile(discord_id=str(interaction.user.id),balance=0); db.session.add(profile); db.session.flush()
+                if profile.balance < item.price:
+                    await interaction.response.send_message("Yeterli puanın yok.",ephemeral=True); return
+                role=None
+                if item.item_type=="role":
+                    if not item.discord_role_id or not isinstance(interaction.user,discord.Member):
+                        await interaction.response.send_message("Rol ürünü yapılandırılmamış.",ephemeral=True); return
+                    role=interaction.guild.get_role(int(item.discord_role_id)) if interaction.guild else None
+                    if not role or not interaction.guild.me.guild_permissions.manage_roles or role>=interaction.guild.me.top_role:
+                        await interaction.response.send_message("Botun bu rolü verme izni veya rol hiyerarşisi uygun değil.",ephemeral=True); return
+                changed=db.session.execute(db.update(UserProfile).where(UserProfile.discord_id==str(interaction.user.id),UserProfile.balance>=item.price).values(balance=UserProfile.balance-item.price))
+                if changed.rowcount!=1:
+                    db.session.rollback(); await interaction.response.send_message("Yeterli puanın yok.",ephemeral=True); return
+                profile=db.session.execute(select(UserProfile).where(UserProfile.discord_id==str(interaction.user.id))).scalar_one()
+                db.session.add(EconomyTransaction(user_id=profile.id,amount=-item.price,balance_after=profile.balance,transaction_type="shop_purchase",description=f"Shop item: {item.key}",actor_discord_id=str(interaction.user.id),idempotency_key=f"shop:{interaction.user.id}:{item.key}:{int(utcnow().timestamp())}"))
+                expiry=utcnow()+timedelta(days=item.duration_days) if item.duration_days else None
+                db.session.add(MemberCollectionItem(discord_id=str(interaction.user.id),item_key=item.key,source="purchase",expires_at=expiry))
+                db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="shop.purchase",target_type="shop_item",target_id=item.key,details={"price":item.price},success=True))
+                db.session.commit()
+                title=item.title; role_id=item.discord_role_id if item.item_type=="role" else None
+            if role_id and isinstance(interaction.user,discord.Member):
+                role=interaction.guild.get_role(int(role_id))
+                try: await interaction.user.add_roles(role,reason="Kaplumbik shop purchase")
+                except discord.HTTPException:
+                    with app.app_context():
+                        adjust_balance(str(interaction.user.id),int(item.price),"shop_refund",f"Rol ürünü verilemedi: {item.key}",actor_discord_id="kaplumbik",idempotency_key=f"shop-refund:{interaction.user.id}:{item.key}:{int(utcnow().timestamp())}")
+                        row=db.session.execute(select(MemberCollectionItem).where(MemberCollectionItem.discord_id==str(interaction.user.id),MemberCollectionItem.item_key==item.key)).scalar_one_or_none()
+                        if row: db.session.delete(row)
+                        db.session.commit()
+                    await interaction.response.send_message("Rol verilemedi; puan iadesi yapıldı.",ephemeral=True); return
+            await interaction.response.send_message(f"Satın alındı: {title}. Harcanan puan: {item.price}.",ephemeral=True)
+        except IntegrityError:
+            db.session.rollback()
+            await interaction.response.send_message("Satın alma çakıştı; veritabanı işlemi geri alındı.",ephemeral=True)
+        except Exception:
+            db.session.rollback(); log.exception("Shop purchase failed")
+            if not interaction.response.is_done(): await interaction.response.send_message("Satın alma tamamlanamadı. İşlem kaydı kontrol edilmeli.",ephemeral=True)
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.guild or message.author.bot or message.webhook_id: return

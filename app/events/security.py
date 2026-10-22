@@ -170,7 +170,7 @@ class SecurityCog(commands.Cog):
         if not (message.mention_everyone or "@everyone" in message.content or "@here" in message.content): return
         member=message.author
         if not isinstance(member,discord.Member): return
-        if member.guild_permissions.mention_everyone or member.guild_permissions.administrator or (settings.owner_discord_id and str(member.id)==str(settings.owner_discord_id)): return
+        if member.guild_permissions.administrator or (settings.owner_discord_id and str(member.id)==str(settings.owner_discord_id)): return
         try:
             await message.delete()
             app=create_app()

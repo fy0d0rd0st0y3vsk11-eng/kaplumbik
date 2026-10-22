@@ -61,7 +61,7 @@ Günlük hedef Europe/Istanbul saatine göre 00.00'da yenilenir; farklı gerçek
 - Deploy as a normal Fadehost Web Service using the repository's existing start command; do not commit tokens or OAuth secrets.
 - Set `APP_ENV=production`, `SECRET_KEY`, `DISCORD_TOKEN`, `OWNER_DISCORD_ID`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and the exact public `DISCORD_REDIRECT_URI`.
 - Set `DATABASE_URL` to a persistent PostgreSQL service. The free web service filesystem is not durable; do not rely on local SQLite for production state.
-- Set `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` only if AI is enabled. Keep secrets in Render environment settings, never in Git.
+- Set `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` only if AI is enabled. Keep secrets in Fadehost environment settings, never in Git.
 - Enable the Discord Message Content and Server Members intents only if needed in the Discord Developer Portal. Invite the bot with applications.commands and required bot permissions.
 - Verify OAuth redirect URL, database persistence, command registration, channel permissions, and restore from backup before inviting members to rely on the bot.
 
@@ -80,11 +80,11 @@ The module-permission record is not a substitute for enforcing permissions on ev
 ## Backup and restore
 
 - The bot creates compressed database snapshots automatically and retains local snapshots for 30 days; owner-only slash commands are `/yedekle` and `/yedekdurum`.
-- Render free Web Service storage is ephemeral. For durable 30-day backups, configure an S3-compatible bucket with `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY`, and `BACKUP_S3_SECRET_KEY`, or point `BACKUP_DIR` at a persistent mounted directory on a host that supports one.
+- If the Fadehost service filesystem is ephemeral, local backups alone are not durable. For durable 30-day backups, configure an S3-compatible bucket with `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY`, and `BACKUP_S3_SECRET_KEY`, or point `BACKUP_DIR` at a persistent mounted directory on a host that supports one.
 - A restore helper exists for controlled maintenance use in `app.events.backups.restore_backup(path)`; it is destructive and must only be used after a separate verified backup and a planned maintenance window. A production restore drill is still required before relying on backups.
 - Dashboard owner login requires Discord OAuth plus TOTP. Configure a strong Base32 `OWNER_TOTP_SECRET` in the host's secret environment settings and add the same secret to an authenticator app. Do not put the secret in Git.
 
-- In production, `BACKUP_ENCRYPTION_KEY` is required. Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and save it only in Render secret environment settings. Keep a separate secure copy; without this key, encrypted backups cannot be restored.
+- In production, `BACKUP_ENCRYPTION_KEY` is required. Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and save it only in Fadehost secret environment settings. Keep a separate secure copy; without this key, encrypted backups cannot be restored.
 
 
 ## Expanded feature commands
@@ -113,7 +113,7 @@ The module-permission record is not a substitute for enforcing permissions on ev
 - `/yedekle`, `/yedekdurum` — owner-only encrypted backup controls.
 - Dashboard owner access requires Discord OAuth and TOTP 2FA. Configure all environment secrets before production.
 
-This remains a development branch. A green GitHub Actions run confirms compile/test success for the tested commit, not a live Discord/Render deployment or a guarantee that every Discord permission and external integration is configured. Perform a real test-server rollout and a verified backup restore drill before production use.
+PR #2 is merged into `main`. A green GitHub Actions run confirms compile/test success for the tested commit, not a live Discord/Fadehost deployment or a guarantee that every Discord permission and external integration is configured. Perform a real test-server rollout and a verified backup restore drill before production use.
 
 
 For dashboard Administrator read-only access, set `DISCORD_GUILD_ID` to the target Mahzen server ID and add the `guilds` scope to the Discord OAuth app. The configured owner remains the only account that can change critical dashboard settings and must pass TOTP. In Discord's server/channel permission settings, remove **Create Invite** from ordinary member roles if invite creation must be restricted; Kaplumbik's `/davet` command itself is admin-only but cannot override Discord's native permission system for the UI.

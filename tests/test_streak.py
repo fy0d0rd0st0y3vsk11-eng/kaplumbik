@@ -73,3 +73,18 @@ def test_makeup_cannot_repeat_a_resolved_day(app):
         make_up_pending_days(1, "99999999999999999")
         with pytest.raises(ValueError):
             make_up_pending_days(1, "99999999999999999")
+
+def test_successful_streak_awards_each_contributor_once(app):
+    from app.database.models import UserProfile, EconomyTransaction
+    with app.app_context():
+        day = date(2026, 10, 21)
+        for i in range(3):
+            record_contribution(day, str(21111111111111111 + i), "222", f"reward-msg-{i}")
+        row, _ = close_day(day)
+        assert row.status == "completed"
+        profiles = UserProfile.query.order_by(UserProfile.discord_id).all()
+        assert len(profiles) == 3
+        assert [profile.balance for profile in profiles] == [5, 5, 5]
+        assert EconomyTransaction.query.filter_by(transaction_type="shared_streak_reward").count() == 3
+        close_day(day)
+        assert EconomyTransaction.query.filter_by(transaction_type="shared_streak_reward").count() == 3

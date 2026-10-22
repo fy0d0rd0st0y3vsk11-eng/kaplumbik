@@ -575,13 +575,18 @@ class AssistantFeatures(commands.Cog):
     @discord.app_commands.command(name="hafizamitemizle", description="Yalnızca kendi konuşma hafızanı sil.")
     async def clear_my_memory(self, interaction: discord.Interaction):
         app=create_app()
+        guild_id=str(interaction.guild_id or "dm")
         with app.app_context():
-            rows=ConversationMemory.query.filter_by(guild_id=str(interaction.guild_id or "dm"),discord_id=str(interaction.user.id)).all()
+            preference=db.session.execute(select(AIMemoryPreference).where(AIMemoryPreference.guild_id==guild_id,AIMemoryPreference.discord_id==str(interaction.user.id))).scalar_one_or_none()
+            if preference is None:
+                preference=AIMemoryPreference(guild_id=guild_id,discord_id=str(interaction.user.id),enabled=False); db.session.add(preference)
+            else: preference.enabled=False
+            rows=ConversationMemory.query.filter_by(guild_id=guild_id,discord_id=str(interaction.user.id)).all()
             deleted=len(rows)
             for row in rows: db.session.delete(row)
             db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_self_delete",target_type="conversation_memory",target_id=str(interaction.user.id),details={"deleted_rows":deleted},success=True))
             db.session.commit()
-        await interaction.response.send_message(f"Kendi konuşma hafızandan {deleted} kayıt silindi.",ephemeral=True)
+        await interaction.response.send_message(f"Kendi konuşma hafızandan {deleted} kayıt silindi ve kişisel hafıza kapatıldı.",ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

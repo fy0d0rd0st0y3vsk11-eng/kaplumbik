@@ -85,3 +85,32 @@ The module-permission record is not a substitute for enforcing permissions on ev
 - Dashboard owner login requires Discord OAuth plus TOTP. Configure a strong Base32 `OWNER_TOTP_SECRET` in the host's secret environment settings and add the same secret to an authenticator app. Do not put the secret in Git.
 
 - In production, `BACKUP_ENCRYPTION_KEY` is required. Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and save it only in Render secret environment settings. Keep a separate secure copy; without this key, encrypted backups cannot be restored.
+
+
+## Expanded feature commands (development branch)
+
+### Shared streak
+- `/seri`, `/serikanal`, `/serikaynakkanal`, `/seritelafi`, `/serikatkiduzelt`.
+- On startup, the bot attempts to recover missed contributions from accessible configured Discord channel history. Discord history permissions and retention still limit what can be recovered.
+- Successful days award the configured number of points per contributor once, using idempotent ledger keys.
+
+### Community
+- `/takvim` — next 7 days of events.
+- `/anket`, `/anketoner` — button poll or AI-suggested draft (AI draft is not published automatically).
+- `/onerigonder`, `/onerioyla`, `/oneridurum` — suggestions, cooldown, voting and moderation status.
+- `/oyunprofil`, `/oyunarkadasi` — opt-in profile and game buddy matching.
+- `/gorevler`, `/goreval` — personal/shared weekly tasks and one-time rewards.
+- `/dukkan`, `/dukkanurunekle`, `/dukkanal`, `/koleksiyon` — configurable rewards and collection.
+- `/puangecmisi` — private recent point ledger.
+- `/sunucuhafizaoner`, `/sunucuhafizabekleyen`, `/sunucuhafizayonet` — proposed shared server knowledge requires moderator approval.
+- `/hafizamami`, `/hafizamitemizle` — member access/deletion controls for personal AI conversation history.
+- `/izinprova`, `/modulizin` — dry-run permission report and owner-controlled module-role configuration.
+
+### Security and operations
+- `/guvenlikrolleri` — owner-only verification/restricted/helper role setup.
+- `/raidkilidikaldir` — owner-only anti-raid/anti-nuke alert reset after 30 minutes without new signals.
+- `/uyetimeout` — helper timeouts capped at 10 minutes; Administrator/owner can set longer durations within Discord's limit.
+- `/yedekle`, `/yedekdurum` — owner-only encrypted backup controls.
+- Dashboard owner access requires Discord OAuth and TOTP 2FA. Configure all environment secrets before production.
+
+This remains a development branch. A green GitHub Actions run confirms compile/test success for the tested commit, not a live Discord/Render deployment or a guarantee that every Discord permission and external integration is configured. Perform a real test-server rollout and a verified backup restore drill before production use.

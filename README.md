@@ -43,3 +43,14 @@ Yönetim paneline gerçek sunucuda erişim açılmadan önce Discord OAuth2 otur
 - Üye bakiyeleri, puan hareketleri ve denetim kayıtları
 - Duyuru ayarları ve bot sağlık durumu
 - Yönetici işlemleri için kimlik doğrulama ve yetki kontrolü
+
+
+## Mahzen ortak seri sistemi (yeni geliştirme dalı)
+
+- `/seri` — günlük hedefi, seri uzunluğunu ve telafi bekleyen günleri gösterir.
+- `/serikanal` — ilerleme ve günlük özetlerin yayımlanacağı kanalı ayarlar.
+- `/serikaynakkanal` — ortak sayaca katkı veren sohbet kanallarını ekler/çıkarır.
+- `/seritelafi` — son telafi bekleyen günleri sunucu sahibi veya Discord Administrator yetkilisi adına telafi eder.
+- `/serikatkiduzelt` — yalnızca tanımlı sunucu sahibinin, gerekçe kaydıyla katkı düzeltmesini sağlar.
+
+Günlük hedef Europe/Istanbul saatine göre 00.00'da yenilenir; farklı gerçek üyelerden 3 mesaj hedefi vardır. Botlar/webhook'lar sayılmaz, aynı üye günde bir kez sayılır. Katkılar ve denetim kayıtları SQL veritabanında tutulur. Bu özellik şu anda `feature/shared-streak-system` dalında geliştirilmekte ve test edilmektedir; ana dala henüz alınmamıştır.

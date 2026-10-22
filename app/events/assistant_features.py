@@ -13,6 +13,7 @@ from app import create_app
 from app.core.config import settings
 from app.database import db
 from app.database.advanced_models import AnnouncementLog, PersonProfile, ConversationMemory
+from app.database.community_models import AIMemoryPreference
 from app.database.event_models import Event
 from app.events.announcements import format_event
 from app.events.feature_service import get_setting, record_health
@@ -53,6 +54,9 @@ def _save_conversation_memory(guild_id: str, channel_id: str | None, discord_id:
         return
     app = create_app()
     with app.app_context():
+        preference = db.session.execute(select(AIMemoryPreference).where(AIMemoryPreference.guild_id==str(guild_id or "dm"), AIMemoryPreference.discord_id==str(discord_id))).scalar_one_or_none()
+        if preference is None or not preference.enabled:
+            return
         row = ConversationMemory(
             guild_id=str(guild_id or "dm"),
             channel_id=str(channel_id) if channel_id else None,
@@ -86,6 +90,9 @@ def _load_conversation_memory(guild_id: str, discord_id: str, query_text: str = 
     app = create_app()
     with app.app_context():
         from sqlalchemy import or_, select
+        preference = db.session.execute(select(AIMemoryPreference).where(AIMemoryPreference.guild_id==str(guild_id or "dm"), AIMemoryPreference.discord_id==str(discord_id))).scalar_one_or_none()
+        if preference is None or not preference.enabled:
+            return ""
         base = select(ConversationMemory).where(
             ConversationMemory.guild_id == str(guild_id or "dm"),
             ConversationMemory.discord_id == str(discord_id),

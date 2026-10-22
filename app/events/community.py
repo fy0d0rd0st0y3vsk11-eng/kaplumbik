@@ -93,6 +93,20 @@ class MahzenCommunity(commands.Cog):
             db.session.add(row); db.session.commit(); proposal_id=row.id
         await interaction.response.send_message(f"Ortak bilgi önerin #{proposal_id} olarak kaydedildi. Yönetici inceleyip onaylamadan AI tarafından doğrulanmış bilgi sayılmaz. Kişisel veya hassas bilgi ekleme.",ephemeral=True)
 
+
+    @app_commands.command(name="sunucuhafizabekleyen", description="Onay bekleyen ortak bilgi önerilerini listele (AI yönetimi izni).")
+    async def pending_server_memories(self, interaction: discord.Interaction):
+        if not can_manage_module(interaction,"ai"):
+            await interaction.response.send_message("AI/ortak hafıza yönetimi izni gerekiyor.",ephemeral=True); return
+        app=create_app()
+        with app.app_context():
+            rows=db.session.execute(select(ServerMemoryProposal).where(ServerMemoryProposal.status=="pending").order_by(ServerMemoryProposal.created_at.asc()).limit(10)).scalars().all()
+            snapshot=[(row.id,row.proposer_id,row.content,row.created_at) for row in rows]
+        if not snapshot:
+            await interaction.response.send_message("Onay bekleyen ortak bilgi önerisi yok.",ephemeral=True); return
+        lines=[f"#{sid} · gönderen ID {uid} · {created.astimezone(TR).strftime('%d.%m %H:%M')}\n{content}" for sid,uid,content,created in snapshot]
+        await interaction.response.send_message("Onay bekleyen ortak bilgiler\n"+"\n\n".join(lines)[:1850],ephemeral=True)
+
     @app_commands.command(name="sunucuhafizayonet", description="Ortak bilgi önerisini onayla veya reddet (yönetici).")
     @app_commands.choices(karar=[app_commands.Choice(name="Onayla ve ekle",value="approved"),app_commands.Choice(name="Reddet",value="rejected")])
     async def review_server_memory(self, interaction: discord.Interaction, onerino: int, karar: app_commands.Choice[str]):

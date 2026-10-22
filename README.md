@@ -36,7 +36,7 @@ Gizli anahtarları, Discord bot tokenını veya OAuth sırlarını kaynak koda y
 
 Yönetim paneline gerçek sunucuda erişim açılmadan önce Discord OAuth2 oturumu ve yönetici/owner yetkilendirmesi uygulanmalıdır. Giriş ve yetki kontrolleri tamamlanmadan paneli herkese açık biçimde kullanmayın.
 
-## Planlanan panel özellikleri
+## Panel kapsamı ve kalan üretim kontrolleri
 
 - Etkinlik oluşturma, düzenleme ve katılım takibi
 - Katılım yönetici tarafından doğrulandıktan sonra puan ödülü
@@ -45,7 +45,7 @@ Yönetim paneline gerçek sunucuda erişim açılmadan önce Discord OAuth2 otur
 - Yönetici işlemleri için kimlik doğrulama ve yetki kontrolü
 
 
-## Mahzen ortak seri sistemi (yeni geliştirme dalı)
+## Mahzen ortak seri sistemi
 
 - `/seri` — günlük hedefi, seri uzunluğunu ve telafi bekleyen günleri gösterir.
 - `/serikanal` — ilerleme ve günlük özetlerin yayımlanacağı kanalı ayarlar.
@@ -53,19 +53,19 @@ Yönetim paneline gerçek sunucuda erişim açılmadan önce Discord OAuth2 otur
 - `/seritelafi` — son telafi bekleyen günleri sunucu sahibi veya Discord Administrator yetkilisi adına telafi eder.
 - `/serikatkiduzelt` — yalnızca tanımlı sunucu sahibinin, gerekçe kaydıyla katkı düzeltmesini sağlar.
 
-Günlük hedef Europe/Istanbul saatine göre 00.00'da yenilenir; farklı gerçek üyelerden 3 mesaj hedefi vardır. Botlar/webhook'lar sayılmaz, aynı üye günde bir kez sayılır. Katkılar ve denetim kayıtları SQL veritabanında tutulur. Bu özellik şu anda `feature/shared-streak-system` dalında geliştirilmekte ve test edilmektedir; ana dala henüz alınmamıştır.
+Günlük hedef Europe/Istanbul saatine göre 00.00'da yenilenir; farklı gerçek üyelerden 3 mesaj hedefi vardır. Botlar/webhook'lar sayılmaz, aynı üye günde bir kez sayılır. Katkılar ve denetim kayıtları SQL veritabanında tutulur. Bu özellik PR #2 ile `main` dalına birleştirilmiştir. Gerçek sunucuda çalışması için kanal ayarları ve gerekli Discord izinleri yapılandırılmalıdır.
 
 
-## Render production checklist
+## Production checklist (Fadehost)
 
-- Deploy as a normal Render Web Service using the repository's existing start command; do not commit tokens or OAuth secrets.
+- Deploy as a normal Fadehost Web Service using the repository's existing start command; do not commit tokens or OAuth secrets.
 - Set `APP_ENV=production`, `SECRET_KEY`, `DISCORD_TOKEN`, `OWNER_DISCORD_ID`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and the exact public `DISCORD_REDIRECT_URI`.
 - Set `DATABASE_URL` to a persistent PostgreSQL service. The free web service filesystem is not durable; do not rely on local SQLite for production state.
 - Set `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` only if AI is enabled. Keep secrets in Render environment settings, never in Git.
 - Enable the Discord Message Content and Server Members intents only if needed in the Discord Developer Portal. Invite the bot with applications.commands and required bot permissions.
 - Verify OAuth redirect URL, database persistence, command registration, channel permissions, and restore from backup before inviting members to rely on the bot.
 
-## Community commands added on feature branch
+## Community commands
 
 - `/oyunprofil`, `/oyunarkadasi`: opt-in member game profile and matching.
 - `/anket`: button-based polls with one mutable vote per member.
@@ -87,7 +87,7 @@ The module-permission record is not a substitute for enforcing permissions on ev
 - In production, `BACKUP_ENCRYPTION_KEY` is required. Generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` and save it only in Render secret environment settings. Keep a separate secure copy; without this key, encrypted backups cannot be restored.
 
 
-## Expanded feature commands (development branch)
+## Expanded feature commands
 
 ### Shared streak
 - `/seri`, `/serikanal`, `/serikaynakkanal`, `/seritelafi`, `/serikatkiduzelt`.
@@ -119,7 +119,7 @@ This remains a development branch. A green GitHub Actions run confirms compile/t
 For dashboard Administrator read-only access, set `DISCORD_GUILD_ID` to the target Mahzen server ID and add the `guilds` scope to the Discord OAuth app. The configured owner remains the only account that can change critical dashboard settings and must pass TOTP. In Discord's server/channel permission settings, remove **Create Invite** from ordinary member roles if invite creation must be restricted; Kaplumbik's `/davet` command itself is admin-only but cannot override Discord's native permission system for the UI.
 
 
-## Fadehost setup (current development branch)
+## Fadehost setup
 
 Use the service's Python start command `python run_bot.py`. The process starts both the Discord bot and the Flask dashboard; the host must expose the assigned `PORT` to the web service. Do not run `run.py` as the bot start command.
 

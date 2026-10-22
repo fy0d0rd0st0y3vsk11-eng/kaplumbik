@@ -88,3 +88,15 @@ def test_successful_streak_awards_each_contributor_once(app):
         assert EconomyTransaction.query.filter_by(transaction_type="shared_streak_reward").count() == 3
         close_day(day)
         assert EconomyTransaction.query.filter_by(transaction_type="shared_streak_reward").count() == 3
+
+def test_streak_tracking_starts_only_after_both_channel_settings(app):
+    from app.database.advanced_models import BotSetting
+    from app.seri.service import ensure_tracking_started_date, set_channel_id, set_source_channel
+    with app.app_context():
+        assert ensure_tracking_started_date("owner") == ""
+        set_channel_id("300", "owner")
+        assert db.session.get(BotSetting, "streak_tracking_started_date") is None
+        set_source_channel("400", True, "owner")
+        row = db.session.get(BotSetting, "streak_tracking_started_date")
+        assert row is not None
+        assert row.value == date.today().isoformat() or len(row.value) == 10

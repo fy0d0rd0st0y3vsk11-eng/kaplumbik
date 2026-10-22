@@ -299,17 +299,54 @@ def callback():
         if not discord_id or not owner_id or not secrets.compare_digest(discord_id, owner_id):
             session.clear()
             abort(403, description="Bu Discord hesabının yönetim paneli erişimi yok.")
+        if not settings.owner_totp_secret:
+            session.clear()
+            abort(503, description="Sahip paneline giriş için OWNER_TOTP_SECRET ortam değişkeninde TOTP 2FA sırrı yapılandırılmalı.")
         session.clear()
-        session["discord_id"] = discord_id
-        session["username"] = str(user.get("global_name") or user.get("username") or "Yönetici")[:100]
+        session["pending_2fa_discord_id"] = discord_id
+        session["pending_2fa_username"] = str(user.get("global_name") or user.get("username") or "Yönetici")[:100]
         session["csrf_token"] = secrets.token_urlsafe(32)
-        return redirect(url_for("dashboard.index"))
+        return redirect(url_for("dashboard.owner_2fa"))
     except HTTPException:
         raise
     except Exception:
         logger.exception("Discord OAuth callback failed.")
         abort(502, description="Discord girişi tamamlanamadı. OAuth URL ve anahtarları kontrol et.")
 
+
+
+@dashboard_bp.route("/2fa", methods=["GET", "POST"])
+def owner_2fa():
+    pending_id = str(session.get("pending_2fa_discord_id", ""))
+    owner_id = str(settings.owner_discord_id or "")
+    if not pending_id or not owner_id or not secrets.compare_digest(pending_id, owner_id):
+        session.clear()
+        return redirect(url_for("dashboard.login"))
+    if request.method == "POST":
+        _require_csrf()
+        code = request.form.get("code", "").strip().replace(" ", "")
+        try:
+            import pyotp
+            valid = bool(settings.owner_totp_secret) and pyotp.TOTP(settings.owner_totp_secret).verify(code, valid_window=1)
+        except Exception:
+            logger.exception("Owner TOTP validation failed")
+            valid = False
+        if not valid:
+            flash("Doğrulama kodu geçersiz veya süresi dolmuş.")
+            return redirect(url_for("dashboard.owner_2fa"))
+        username = session.get("pending_2fa_username", "Yönetici")
+        session.clear()
+        session["discord_id"] = pending_id
+        session["username"] = username
+        session["csrf_token"] = secrets.token_urlsafe(32)
+        return redirect(url_for("dashboard.index"))
+    return render_template_string("""
+    <!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Kaplumbik · İki aşamalı doğrulama</title><body style="font:16px system-ui;max-width:420px;margin:12vh auto;padding:20px;background:#f5f3eb;color:#30382f">
+    <h1>İki aşamalı doğrulama</h1><p>Discord girişi doğrulandı. Kimlik doğrulama uygulamanın geçerli 6 haneli kodunu gir.</p>
+    {% for message in get_flashed_messages() %}<p>{{ message }}</p>{% endfor %}
+    <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="code">Doğrulama kodu</label><input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" required autocomplete="one-time-code"><button type="submit">Doğrula</button></form></body></html>
+    """, csrf_token=session.get("csrf_token",""))
 
 @dashboard_bp.get("/logout")
 def logout():

@@ -246,7 +246,12 @@ def create_streak_channel():
             flash(f"Discord API isteği başarısız oldu (HTTP {status}). Botun sunucuya erişimini ve kanal izinlerini kontrol et.")
     except (requests.RequestException, ValueError):
         logger.exception("Discord #seri channel setup failed.")
+        db.session.rollback()
         flash("Seri kanalı ayarlanamadı. Fadehost günlüklerini kontrol et; Discord bağlantısı veya yanıtı geçersiz.")
+    except Exception:
+        logger.exception("Unexpected error while saving #seri channel setting.")
+        db.session.rollback()
+        flash("Kanal oluşturulmuş olabilir ancak ayar kaydedilemedi. Aynı düğmeye tekrar basarsan mevcut #seri kanalı yeniden seçilir.")
     return redirect(url_for("dashboard.community_settings"))
 
 

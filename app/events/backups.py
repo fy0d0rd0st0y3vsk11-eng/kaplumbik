@@ -72,7 +72,7 @@ def create_backup():
             cutoff=datetime.now(timezone.utc)-timedelta(days=RETENTION_DAYS)
             response=client.list_objects_v2(Bucket=bucket)
             for item in response.get("Contents",[]):
-                if item["LastModified"]<cutoff: client.delete_object(Bucket=bucket,Key=item["Key"])
+                if item["Key"].startswith("kaplumbik-") and item["LastModified"]<cutoff: client.delete_object(Bucket=bucket,Key=item["Key"])
         cutoff_local=datetime.now(timezone.utc)-timedelta(days=RETENTION_DAYS)
         for old in directory.glob("kaplumbik-*.json.gz"):
             try:

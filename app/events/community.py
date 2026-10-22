@@ -345,6 +345,13 @@ class MahzenCommunity(commands.Cog):
                 p=db.session.execute(select(WeeklyQuestProgress).where(WeeklyQuestProgress.quest_id==q.id,WeeklyQuestProgress.discord_id==str(message.author.id))).scalar_one_or_none()
                 if not p: p=WeeklyQuestProgress(quest_id=q.id,discord_id=str(message.author.id),progress=0); db.session.add(p)
                 p.progress=min(q.target,p.progress+1)
+            local_day=datetime.now(TR).date().isoformat()
+            day_quests=db.session.execute(select(WeeklyQuest).where(WeeklyQuest.enabled.is_(True),WeeklyQuest.starts_at<=now,WeeklyQuest.ends_at>now,WeeklyQuest.quest_type=="active_days")).scalars().all()
+            for q in day_quests:
+                p=db.session.execute(select(WeeklyQuestProgress).where(WeeklyQuestProgress.quest_id==q.id,WeeklyQuestProgress.discord_id==str(message.author.id))).scalar_one_or_none()
+                if not p: p=WeeklyQuestProgress(quest_id=q.id,discord_id=str(message.author.id),progress=0); db.session.add(p)
+                if p.last_activity_day != local_day:
+                    p.progress=min(q.target,p.progress+1); p.last_activity_day=local_day
             shared=db.session.execute(select(WeeklyQuest).where(WeeklyQuest.enabled.is_(True),WeeklyQuest.starts_at<=now,WeeklyQuest.ends_at>now,WeeklyQuest.quest_type=="shared_members")).scalars().all()
             for q in shared:
                 p=db.session.execute(select(WeeklyQuestProgress).where(WeeklyQuestProgress.quest_id==q.id,WeeklyQuestProgress.discord_id==str(message.author.id))).scalar_one_or_none()

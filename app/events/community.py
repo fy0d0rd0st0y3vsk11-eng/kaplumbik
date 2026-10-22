@@ -23,6 +23,17 @@ TR = ZoneInfo("Europe/Istanbul")
 def utcnow():
     return datetime.now(timezone.utc)
 
+def as_utc(value):
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+def is_expired(value, now=None):
+    normalized = as_utc(value)
+    return bool(normalized and normalized <= (now or utcnow()))
+
 def is_owner(i):
     return bool(settings.owner_discord_id) and str(i.user.id) == str(settings.owner_discord_id)
 
@@ -66,7 +77,7 @@ class PollView(discord.ui.View):
             app=create_app()
             with app.app_context():
                 poll=db.session.get(CommunityPoll,self.poll_id)
-                if not poll or poll.status != "open" or (poll.ends_at and poll.ends_at <= utcnow()):
+                if not poll or poll.status != "open" or is_expired(poll.ends_at):
                     await interaction.response.send_message("Bu anket artık açık değil.",ephemeral=True); return
                 vote=db.session.execute(select(CommunityPollVote).where(CommunityPollVote.poll_id==poll.id,CommunityPollVote.discord_id==str(interaction.user.id))).scalar_one_or_none()
                 if vote: vote.option_index=idx
@@ -266,7 +277,7 @@ class MahzenCommunity(commands.Cog):
             poll=db.session.get(CommunityPoll,anketno)
             if not poll:
                 await interaction.response.send_message("Anket bulunamadı.",ephemeral=True); return
-            if poll.ends_at and poll.ends_at<=utcnow() and poll.status=="open":
+            if is_expired(poll.ends_at) and poll.status=="open":
                 poll.status="closed"; db.session.commit()
             counts=[db.session.scalar(select(func.count(CommunityPollVote.id)).where(CommunityPollVote.poll_id==poll.id,CommunityPollVote.option_index==idx)) or 0 for idx,_ in enumerate(poll.options)]
             total=sum(counts)
@@ -363,7 +374,7 @@ class MahzenCommunity(commands.Cog):
         app=create_app()
         with app.app_context():
             rows=db.session.execute(select(MemberCollectionItem).where(MemberCollectionItem.discord_id==str(interaction.user.id)).order_by(MemberCollectionItem.acquired_at.desc()).limit(50)).scalars().all()
-            lines=[f"{x.item_key} · {x.source}"+(f" · bitiş {x.expires_at.astimezone(TR).strftime('%d.%m.%Y')}" if x.expires_at else " · kalıcı") for x in rows if not x.expires_at or x.expires_at>utcnow()]
+            lines=[f"{x.item_key} · {x.source}"+(f" · bitiş {as_utc(x.expires_at).astimezone(TR).strftime('%d.%m.%Y')}" if x.expires_at else " · kalıcı") for x in rows if not is_expired(x.expires_at)]
         await interaction.response.send_message("Koleksiyonun\n"+("\n".join(lines) if lines else "Henüz koleksiyon öğen yok."),ephemeral=True)
 
     @app_commands.command(name="modulizin", description="Bir modülde rol bazlı yönetim izni ayarla (yalnızca sahip).")
@@ -398,7 +409,7 @@ class MahzenCommunity(commands.Cog):
         try:
             with app.app_context():
                 quest=db.session.get(WeeklyQuest,gorev)
-                if not quest or not quest.enabled or quest.ends_at<=utcnow():
+                if not quest or not quest.enabled or is_expired(quest.ends_at):
                     await interaction.response.send_message("Görev bulunamadı veya süresi bitti.",ephemeral=True); return
                 progress=db.session.execute(select(WeeklyQuestProgress).where(WeeklyQuestProgress.quest_id==quest.id,WeeklyQuestProgress.discord_id==str(interaction.user.id))).scalar_one_or_none()
                 if quest.quest_type=="shared_members":

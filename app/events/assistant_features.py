@@ -12,6 +12,7 @@ from discord.ext import commands, tasks
 from app import create_app
 from app.core.config import settings
 from app.database import db
+from app.database.models import AuditLog
 from app.database.advanced_models import AnnouncementLog, PersonProfile, ConversationMemory
 from app.database.community_models import AIMemoryPreference
 from app.database.event_models import Event
@@ -529,15 +530,47 @@ class AssistantFeatures(commands.Cog):
             await interaction.followup.send(content[:1900], allowed_mentions=discord.AllowedMentions.none())
 
 
+
+    @discord.app_commands.command(name="hafiziyiac", description="Kendi AI konuşma hafızanı açık rızayla etkinleştir.")
+    async def enable_my_memory(self, interaction: discord.Interaction):
+        guild_id=str(interaction.guild_id or "dm")
+        app=create_app()
+        with app.app_context():
+            preference=db.session.execute(select(AIMemoryPreference).where(AIMemoryPreference.guild_id==guild_id,AIMemoryPreference.discord_id==str(interaction.user.id))).scalar_one_or_none()
+            if preference is None:
+                preference=AIMemoryPreference(guild_id=guild_id,discord_id=str(interaction.user.id),enabled=True); db.session.add(preference)
+            else: preference.enabled=True
+            db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_opt_in",target_type="member",target_id=str(interaction.user.id),details={"guild_id":guild_id},success=True))
+            db.session.commit()
+        await interaction.response.send_message("Kişisel AI hafızan açıldı. Yalnızca Kaplumbik'e doğrudan yazdığın mesajlar bu sunucuda senin hesabınla ilişkilendirilebilir; /hafizami ile görebilir, /hafiziyikapat ile kapatıp silebilirsin.",ephemeral=True)
+
+    @discord.app_commands.command(name="hafiziyikapat", description="Kişisel AI hafızanı kapat ve bu sunucudaki kayıtlarını sil.")
+    async def disable_my_memory(self, interaction: discord.Interaction):
+        guild_id=str(interaction.guild_id or "dm")
+        app=create_app()
+        with app.app_context():
+            preference=db.session.execute(select(AIMemoryPreference).where(AIMemoryPreference.guild_id==guild_id,AIMemoryPreference.discord_id==str(interaction.user.id))).scalar_one_or_none()
+            if preference is None:
+                preference=AIMemoryPreference(guild_id=guild_id,discord_id=str(interaction.user.id),enabled=False); db.session.add(preference)
+            else: preference.enabled=False
+            rows=ConversationMemory.query.filter_by(guild_id=guild_id,discord_id=str(interaction.user.id)).all()
+            deleted=len(rows)
+            for row in rows: db.session.delete(row)
+            db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_opt_out_delete",target_type="member",target_id=str(interaction.user.id),details={"guild_id":guild_id,"deleted_rows":deleted},success=True))
+            db.session.commit()
+        await interaction.response.send_message(f"Kişisel AI hafızan kapatıldı ve {deleted} kayıt silindi.",ephemeral=True)
+
     @discord.app_commands.command(name="hafizami", description="Kaplumbik'in senin için sakladığı konuşma hafızasının özetini göster.")
     async def my_memory(self, interaction: discord.Interaction):
         app=create_app()
         with app.app_context():
             from sqlalchemy import select, func
+            preference=db.session.execute(select(AIMemoryPreference).where(AIMemoryPreference.guild_id==str(interaction.guild_id or "dm"),AIMemoryPreference.discord_id==str(interaction.user.id))).scalar_one_or_none()
+            enabled=bool(preference and preference.enabled)
             count=db.session.scalar(select(func.count(ConversationMemory.id)).where(ConversationMemory.guild_id==str(interaction.guild_id or "dm"),ConversationMemory.discord_id==str(interaction.user.id))) or 0
             recent=db.session.execute(select(ConversationMemory).where(ConversationMemory.guild_id==str(interaction.guild_id or "dm"),ConversationMemory.discord_id==str(interaction.user.id)).order_by(ConversationMemory.created_at.desc()).limit(5)).scalars().all()
             snippets=[f"{row.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')} · {row.role}: {row.content[:100]}" for row in recent]
-        await interaction.response.send_message(f"Seninle doğrudan Kaplumbik arasındaki konuşmalardan kayıtlı satır: {count}.\nSon kayıtlar:\n"+("\n".join(snippets) if snippets else "Kayıt yok.")+"\nKayıtlarını temizlemek için /hafizamitemizle kullan.",ephemeral=True)
+        await interaction.response.send_message(f"Kişisel hafıza: {'açık' if enabled else 'kapalı'}. Seninle doğrudan Kaplumbik arasındaki kayıtlı satır: {count}.\nSon kayıtlar:\n"+("\n".join(snippets) if snippets else "Kayıt yok.")+"\nKayıtlarını temizlemek için /hafizamitemizle kullan.",ephemeral=True)
 
     @discord.app_commands.command(name="hafizamitemizle", description="Yalnızca kendi konuşma hafızanı sil.")
     async def clear_my_memory(self, interaction: discord.Interaction):
@@ -546,7 +579,7 @@ class AssistantFeatures(commands.Cog):
             rows=ConversationMemory.query.filter_by(guild_id=str(interaction.guild_id or "dm"),discord_id=str(interaction.user.id)).all()
             deleted=len(rows)
             for row in rows: db.session.delete(row)
-            db.session.add(__import__("app.database.models",fromlist=["AuditLog"]).AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_self_delete",target_type="conversation_memory",target_id=str(interaction.user.id),details={"deleted_rows":deleted},success=True))
+            db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_self_delete",target_type="conversation_memory",target_id=str(interaction.user.id),details={"deleted_rows":deleted},success=True))
             db.session.commit()
         await interaction.response.send_message(f"Kendi konuşma hafızandan {deleted} kayıt silindi.",ephemeral=True)
 

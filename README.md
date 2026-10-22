@@ -75,3 +75,11 @@ Günlük hedef Europe/Istanbul saatine göre 00.00'da yenilenir; farklı gerçek
 - `/modulizin`: owner-only role/module permission configuration record.
 
 The module-permission record is not a substitute for enforcing permissions on every dashboard route and command. Those enforcement paths and remaining planned dashboard features must be reviewed before production rollout.
+
+
+## Backup and restore
+
+- The bot creates compressed database snapshots automatically and retains local snapshots for 30 days; owner-only slash commands are `/yedekle` and `/yedekdurum`.
+- Render free Web Service storage is ephemeral. For durable 30-day backups, configure an S3-compatible bucket with `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY`, and `BACKUP_S3_SECRET_KEY`, or point `BACKUP_DIR` at a persistent mounted directory on a host that supports one.
+- A restore helper exists for controlled maintenance use in `app.events.backups.restore_backup(path)`; it is destructive and must only be used after a separate verified backup and a planned maintenance window. A production restore drill is still required before relying on backups.
+- Dashboard owner login requires Discord OAuth plus TOTP. Configure a strong Base32 `OWNER_TOTP_SECRET` in the host's secret environment settings and add the same secret to an authenticator app. Do not put the secret in Git.

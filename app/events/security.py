@@ -95,11 +95,14 @@ class SecurityCog(commands.Cog):
             last_join=now.isoformat()
             set_setting("raid_last_join_at",last_join)
             raid=len(self.joins)>=threshold
+            lock_raw=setting("raid_lockdown_until","")
+            try: lockdown_active=bool(lock_raw and datetime.fromisoformat(lock_raw)>now)
+            except ValueError: lockdown_active=False
             if raid:
                 set_setting("raid_lockdown_until",(now+timedelta(minutes=30)).isoformat())
                 db.session.add(AuditLog(actor_discord_id="kaplumbik",action="security.raid_lockdown",target_type="guild",target_id=str(member.guild.id),details={"join_count":len(self.joins),"window_seconds":30},success=True)); db.session.commit()
         try:
-            if raid and restricted_id.isdigit():
+            if (raid or lockdown_active) and restricted_id.isdigit():
                 role=member.guild.get_role(int(restricted_id))
                 if role: await member.add_roles(role,reason="Kaplumbik anti-raid temporary restriction")
             if unverified_id.isdigit():

@@ -3,11 +3,14 @@ import secrets
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+import requests
+
 from sqlalchemy import select
 
 from flask import flash, redirect, render_template_string, request, session, url_for
 
 from app.database import db
+from app.core.config import settings
 from app.database.advanced_models import AchievementDefinition, AnnouncementLog, BotSetting, Giveaway, GiveawayParticipant, PersonProfile
 from app.database.event_models import Event
 from app.database.models import AuditLog, UserProfile
@@ -163,12 +166,72 @@ small,.muted{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat
 {% for key,label in card_options %}<label class="check"><input type="checkbox" name="cards" value="{{ key }}" {% if key in cards %}checked{% endif %}>{{ label }}</label>{% endfor %}
 </div>
 <h2>Öneri kutusu</h2><label>Önerilerin yayımlanacağı kanal ID'si (boşsa komutun kullanıldığı kanal)</label><input name="suggestion_channel_id" inputmode="numeric" value="{{ suggestion_channel_id }}">
-<h2>Ortak seri</h2><label>İlerleme ve günlük özet kanalı ID'si</label><input name="streak_channel_id" inputmode="numeric" value="{{ streak_channel_id }}"><label>Sayılacak sohbet kanalı ID'leri (virgülle ayır)</label><input name="streak_source_channel_ids" value="{{ streak_source_channel_ids }}"><label>Her başarılı gün için üye başına ödül puanı (0–1000)</label><input name="streak_reward_points" type="number" min="0" max="1000" value="{{ streak_reward_points }}"><small>Botların değil, yalnızca gerçek üyelerin mesajları sayılır. Kanal izinlerini Discord tarafında da doğrula.</small>
+<h2>Ortak seri</h2><label>İlerleme ve günlük özet kanalı ID'si</label><input name="streak_channel_id" inputmode="numeric" value="{{ streak_channel_id }}"><small>Henüz #seri yoksa aşağıdaki ayrı düğmeyle dashboard içinden oluşturabilir veya mevcut #seri kanalını seçebilirsin.</small><label>Sayılacak sohbet kanalı ID'leri (virgülle ayır)</label><input name="streak_source_channel_ids" value="{{ streak_source_channel_ids }}"><label>Her başarılı gün için üye başına ödül puanı (0–1000)</label><input name="streak_reward_points" type="number" min="0" max="1000" value="{{ streak_reward_points }}"><small>Botların değil, yalnızca gerçek üyelerin mesajları sayılır. Kaynak kanallarda botun View Channel ve Read Message History izinleri olmalı.</small>
 <h2>Bakım modu</h2><label class="check"><input type="checkbox" name="maintenance_mode" value="true" {% if maintenance_mode %}checked{% endif %}>Paneli bakım moduna al (sunucu sahibi yine erişebilir)</label>
 <button type="submit">Ayarları kaydet</button></form></section>
+<section><h2>🐢 Seri kanalını hazırla</h2><p class="muted">Bu işlem Mahzen sunucusunda metin kanalı oluşturma iznini kullanır. Aynı isimde #seri varsa yenisini açmak yerine mevcut kanalı seçer ve seri çıktısı olarak kaydeder.</p><form method="post" action="{{ url_for('dashboard.create_streak_channel') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Mevcut #seri kanalını seç / yoksa oluştur</button></form></section>
 <section><h2>Güvenlik notu</h2><p>Paneldeki kritik yönetim işlemleri şu an sunucu sahibiyle sınırlı. Modül izinlerini kaydetmek tek başına erişim izni vermemeli; izin kontrolü her işlemde ayrıca uygulanmalı. Bakım modu yalnızca web panelini etkiler, Discord botunu durdurmaz.</p></section>
 </body></html>
 """
+
+
+@dashboard_bp.post("/community/streak-channel/create")
+@owner_required
+def create_streak_channel():
+    _require_csrf()
+    guild_id = str(settings.discord_guild_id or "").strip()
+    if not guild_id.isdigit():
+        flash("Önce Fadehost ortam değişkenlerine Mahzen sunucusunun DISCORD_GUILD_ID değerini ekle.")
+        return redirect(url_for("dashboard.community_settings"))
+    if not settings.discord_token:
+        flash("DISCORD_TOKEN ayarlanmamış; bot API üzerinden kanal oluşturulamıyor.")
+        return redirect(url_for("dashboard.community_settings"))
+    headers = {"Authorization": f"Bot {settings.discord_token}", "Content-Type": "application/json"}
+    base = f"https://discord.com/api/v10/guilds/{guild_id}/channels"
+    try:
+        response = requests.get(base, headers=headers, timeout=8)
+        response.raise_for_status()
+        channels = response.json()
+        if not isinstance(channels, list):
+            raise ValueError("Discord kanal listesi beklenmeyen biçimde döndü.")
+        channel = next((item for item in channels if item.get("type") == 0 and str(item.get("name", "")).casefold() == "seri"), None)
+        created = False
+        if channel is None:
+            response = requests.post(base, headers=headers, json={
+                "name": "seri",
+                "type": 0,
+                "topic": "Mahzen ortak serisi · günlük ilerleme ve özetler Kaplumbik tarafından yayımlanır."
+            }, timeout=8)
+            response.raise_for_status()
+            channel = response.json()
+            created = True
+        channel_id = str(channel.get("id", ""))
+        if not channel_id.isdigit():
+            raise ValueError("Discord kanal yanıtında geçerli bir kanal ID'si yok.")
+        actor = str(session["discord_id"])
+        set_setting("streak_channel_id", channel_id, actor)
+        db.session.add(AuditLog(
+            actor_discord_id=actor,
+            action="dashboard.streak_channel_create_or_select",
+            target_type="channel",
+            target_id=channel_id,
+            details={"guild_id": guild_id, "created": created, "channel_name": channel.get("name", "seri")},
+            success=True,
+        ))
+        db.session.commit()
+        flash(f"{'#seri kanalı oluşturuldu' if created else 'Mevcut #seri kanalı seçildi'} ve seri çıktısı olarak kaydedildi. Kanal ID: {channel_id}")
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else 0
+        logger.exception("Discord #seri channel setup failed.")
+        if status == 403:
+            flash("Discord kanal oluşturma izni reddedildi. Botun Mahzen sunucusunda Kanalları Yönet yetkisini kontrol et.")
+        else:
+            flash(f"Discord API isteği başarısız oldu (HTTP {status}). Botun sunucuya erişimini ve kanal izinlerini kontrol et.")
+    except (requests.RequestException, ValueError):
+        logger.exception("Discord #seri channel setup failed.")
+        flash("Seri kanalı ayarlanamadı. Fadehost günlüklerini kontrol et; Discord bağlantısı veya yanıtı geçersiz.")
+    return redirect(url_for("dashboard.community_settings"))
+
 
 @dashboard_bp.get("/community")
 @owner_required

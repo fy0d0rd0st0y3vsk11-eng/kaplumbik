@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 import pytest
 from sqlalchemy.exc import IntegrityError
 from app import create_app
@@ -57,3 +58,41 @@ def test_expiry_checks_accept_sqlite_naive_datetimes():
     assert as_utc(naive_past).tzinfo is timezone.utc
     assert is_expired(naive_past)
     assert not is_expired(datetime.now(timezone.utc)+timedelta(days=1))
+
+def test_dashboard_creates_and_selects_streak_channel(app, monkeypatch):
+    from app.dashboard import advanced_routes, routes
+    from app.database.advanced_models import BotSetting
+    monkeypatch.setattr(routes, "settings", SimpleNamespace(owner_discord_id="11111111111111111"))
+    monkeypatch.setattr(advanced_routes, "settings", SimpleNamespace(
+        discord_guild_id="22222222222222222",
+        discord_token="test-bot-token",
+    ))
+
+    class FakeResponse:
+        def __init__(self, payload, status=200):
+            self.payload=payload
+            self.status_code=status
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                import requests
+                raise requests.HTTPError(response=self)
+        def json(self):
+            return self.payload
+
+    monkeypatch.setattr(advanced_routes.requests, "get", lambda *args, **kwargs: FakeResponse([]))
+    created=[]
+    def fake_post(*args, **kwargs):
+        created.append(kwargs.get("json"))
+        return FakeResponse({"id":"33333333333333333","name":"seri","type":0})
+    monkeypatch.setattr(advanced_routes.requests, "post", fake_post)
+
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session["discord_id"]="11111111111111111"
+        session["csrf_token"]="csrf-test"
+    response=client.post("/dashboard/community/streak-channel/create",data={"csrf_token":"csrf-test"})
+    assert response.status_code == 302
+    assert created and created[0]["name"] == "seri"
+    with app.app_context():
+        saved=db.session.get(BotSetting,"streak_channel_id")
+        assert saved.value == "33333333333333333"

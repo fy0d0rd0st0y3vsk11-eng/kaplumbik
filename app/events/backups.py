@@ -1,4 +1,5 @@
 import gzip
+import io
 import json
 import logging
 import os
@@ -10,6 +11,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 from sqlalchemy import select
+from cryptography.fernet import Fernet
 
 from app import create_app
 from app.core.config import settings
@@ -61,8 +63,15 @@ def create_backup():
         day=datetime.now(TR).strftime("%Y-%m-%d")
         filename=f"kaplumbik-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json.gz"
         directory=_backup_dir(); directory.mkdir(parents=True,exist_ok=True)
+        key=os.getenv("BACKUP_ENCRYPTION_KEY","").strip()
+        if settings.app_env.casefold()=="production" and not key:
+            raise RuntimeError("Production backups require BACKUP_ENCRYPTION_KEY.")
+        compressed=gzip.compress(json.dumps(payload,ensure_ascii=False,separators=(",",":")).encode("utf-8"))
+        if key:
+            compressed=Fernet(key.encode("ascii")).encrypt(compressed)
+            filename += ".enc"
         path=directory/filename
-        with gzip.open(path,"wt",encoding="utf-8") as handle: json.dump(payload,handle,ensure_ascii=False,separators=(",",":"))
+        path.write_bytes(compressed)
         bucket=os.getenv("BACKUP_S3_BUCKET","").strip()
         client=_s3_client()
         remote=False
@@ -90,8 +99,13 @@ def create_backup():
 def restore_backup(path):
     """Destructive restore helper. Caller must explicitly confirm before invoking."""
     source=Path(path)
-    opener=gzip.open if source.suffix==".gz" else open
-    with opener(source,"rt",encoding="utf-8") as handle: payload=json.load(handle)
+    raw=source.read_bytes()
+    if source.suffix==".enc":
+        key=os.getenv("BACKUP_ENCRYPTION_KEY","").strip()
+        if not key: raise ValueError("BACKUP_ENCRYPTION_KEY is required to decrypt this backup.")
+        raw=Fernet(key.encode("ascii")).decrypt(raw)
+    if raw[:2]==b"\\x1f\\x8b": raw=gzip.decompress(raw)
+    payload=json.loads(raw.decode("utf-8"))
     if payload.get("format_version")!=1 or not isinstance(payload.get("tables"),list): raise ValueError("Unsupported or invalid backup format.")
     app=create_app()
     with app.app_context():

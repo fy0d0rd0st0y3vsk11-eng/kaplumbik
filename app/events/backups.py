@@ -83,7 +83,7 @@ def create_backup(application=None):
             for item in response.get("Contents",[]):
                 if item["Key"].startswith("kaplumbik-") and item["LastModified"]<cutoff: client.delete_object(Bucket=bucket,Key=item["Key"])
         cutoff_local=datetime.now(timezone.utc)-timedelta(days=RETENTION_DAYS)
-        for old in directory.glob("kaplumbik-*.json.gz"):
+        for old in directory.glob("kaplumbik-*.json.gz*"):
             try:
                 if datetime.fromtimestamp(old.stat().st_mtime,timezone.utc)<cutoff_local: old.unlink()
             except OSError: log.exception("Could not prune old backup %s",old)

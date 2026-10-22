@@ -163,6 +163,7 @@ small,.muted{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat
 {% for key,label in card_options %}<label class="check"><input type="checkbox" name="cards" value="{{ key }}" {% if key in cards %}checked{% endif %}>{{ label }}</label>{% endfor %}
 </div>
 <h2>Öneri kutusu</h2><label>Önerilerin yayımlanacağı kanal ID'si (boşsa komutun kullanıldığı kanal)</label><input name="suggestion_channel_id" inputmode="numeric" value="{{ suggestion_channel_id }}">
+<h2>Ortak seri</h2><label>İlerleme ve günlük özet kanalı ID'si</label><input name="streak_channel_id" inputmode="numeric" value="{{ streak_channel_id }}"><label>Sayılacak sohbet kanalı ID'leri (virgülle ayır)</label><input name="streak_source_channel_ids" value="{{ streak_source_channel_ids }}"><small>Botların değil, yalnızca gerçek üyelerin mesajları sayılır. Kanal izinlerini Discord tarafında da doğrula.</small>
 <h2>Bakım modu</h2><label class="check"><input type="checkbox" name="maintenance_mode" value="true" {% if maintenance_mode %}checked{% endif %}>Paneli bakım moduna al (sunucu sahibi yine erişebilir)</label>
 <button type="submit">Ayarları kaydet</button></form></section>
 <section><h2>Güvenlik notu</h2><p>Paneldeki kritik yönetim işlemleri şu an sunucu sahibiyle sınırlı. Modül izinlerini kaydetmek tek başına erişim izni vermemeli; izin kontrolü her işlemde ayrıca uygulanmalı. Bakım modu yalnızca web panelini etkiler, Discord botunu durdurmaz.</p></section>
@@ -178,6 +179,8 @@ def community_settings():
         cards=[x for x in get_setting("dashboard_home_cards","overview,events,economy,security,streak,ai").split(",") if x],
         card_options=[("overview","Genel bakış"),("events","Etkinlikler"),("economy","Puanlar ve mağaza"),("security","Güvenlik"),("streak","Ortak seri"),("ai","AI kontrol merkezi")],
         suggestion_channel_id=get_setting("suggestion_channel_id",""),
+        streak_channel_id=get_setting("streak_channel_id",""),
+        streak_source_channel_ids=get_setting("streak_source_channel_ids",""),
         maintenance_mode=get_setting("maintenance_mode","false").casefold()=="true")
 
 @dashboard_bp.post("/community")
@@ -193,12 +196,21 @@ def community_settings_save():
     channel=request.form.get("suggestion_channel_id","").strip()
     if channel and not channel.isdigit():
         flash("Öneri kanalı Discord kanal ID'si olmalı."); return redirect(url_for("dashboard.community_settings"))
+    output_channel=request.form.get("streak_channel_id","").strip()
+    source_channels=request.form.get("streak_source_channel_ids","").strip()
+    if output_channel and not output_channel.isdigit():
+        flash("Seri çıktı kanalı ID'si sayısal olmalı."); return redirect(url_for("dashboard.community_settings"))
+    source_ids=[x.strip() for x in source_channels.split(",") if x.strip()]
+    if any(not x.isdigit() for x in source_ids):
+        flash("Seri kaynak kanalları yalnızca sayısal Discord ID'leri içermeli."); return redirect(url_for("dashboard.community_settings"))
     actor=str(session["discord_id"])
     set_setting("dashboard_theme",theme,actor)
     set_setting("dashboard_home_cards",",".join(dict.fromkeys(cards)),actor)
     set_setting("suggestion_channel_id",channel,actor)
+    set_setting("streak_channel_id",output_channel,actor)
+    set_setting("streak_source_channel_ids",",".join(dict.fromkeys(source_ids)),actor)
     set_setting("maintenance_mode","true" if request.form.get("maintenance_mode")=="true" else "false",actor)
-    db.session.add(AuditLog(actor_discord_id=actor,action="dashboard.customization",target_type="dashboard",target_id="community",details={"theme":theme,"cards":cards,"maintenance_mode":request.form.get("maintenance_mode")=="true"},success=True))
+    db.session.add(AuditLog(actor_discord_id=actor,action="dashboard.customization",target_type="dashboard",target_id="community",details={"theme":theme,"cards":cards,"maintenance_mode":request.form.get("maintenance_mode")=="true","streak_channel_id":output_channel,"streak_source_channel_ids":source_ids},success=True))
     db.session.commit()
     flash("Panel ayarları kaydedildi.")
     return redirect(url_for("dashboard.community_settings"))

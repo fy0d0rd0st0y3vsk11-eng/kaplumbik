@@ -152,10 +152,11 @@ COMMUNITY_SETTINGS_PAGE = """
 <title>Kaplumbik · Topluluk ayarları</title>
 <style>
 :root{color-scheme:light;--bg:#f5f3eb;--panel:#fffdf7;--line:#d9dfd0;--text:#30382f;--muted:#737d70;--accent:#7b9271}
-body{font:15px/1.55 system-ui,sans-serif;background:var(--bg);color:var(--text);max-width:900px;margin:28px auto;padding:0 18px}
-section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin:16px 0}
-label{display:block;margin:12px 0 5px;color:var(--muted)}input,select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:9px;width:100%;background:white;color:var(--text)}
-button,.button{display:inline-block;background:var(--accent);color:#172018;border:0;border-radius:9px;padding:10px 14px;margin-top:12px;text-decoration:none;font-weight:700}
+body{font:15px/1.6 system-ui,-apple-system,sans-serif;background:radial-gradient(ellipse at 8% 0%,#e2e9d9 0,transparent 38%),radial-gradient(ellipse at 96% 10%,#efe3d0 0,transparent 36%),var(--bg);color:var(--text);max-width:940px;margin:28px auto;padding:0 18px 80px}
+h1{font-size:clamp(26px,4vw,36px);letter-spacing:-.04em;margin:10px 0 4px}h2{font-size:19px;letter-spacing:-.02em;margin:4px 0 12px}
+section{background:rgba(255,253,247,.95);border:1px solid var(--line);border-radius:18px;padding:clamp(16px,3vw,24px);margin:16px 0;box-shadow:0 10px 28px #34412b0a}
+label{display:block;margin:12px 0 5px;color:var(--muted);font-weight:650;font-size:13px}input,select{font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;width:100%;background:#fffefa;color:var(--text)}input:focus,select:focus{outline:2px solid #7b927144;border-color:var(--accent)}
+button,.button{display:inline-block;background:linear-gradient(110deg,var(--accent),#a6b99a);color:#172018;border:0;border-radius:10px;padding:10px 14px;margin-top:12px;text-decoration:none;font-weight:750;cursor:pointer;transition:transform .15s ease,filter .15s ease}button:hover,.button:hover{filter:brightness(1.04);transform:translateY(-1px)}
 small,.muted{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.check{display:flex;gap:9px;align-items:center}.check input{width:auto}
 </style></head><body><h1>🐢 Kaplumbik · Panel kişiselleştirme</h1><p class="muted">Görünüm, ana sayfa kartları ve bakım modu. Bu ayarlar güvenlik izinlerinin yerine geçmez.</p>
 <a class="button" href="{{ url_for('dashboard.index') }}">Ana sayfa</a> <a class="button" href="{{ url_for('dashboard.advanced_index') }}">Gelişmiş ayarlar</a>

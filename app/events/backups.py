@@ -104,7 +104,7 @@ def restore_backup(path, application=None):
         key=os.getenv("BACKUP_ENCRYPTION_KEY","").strip()
         if not key: raise ValueError("BACKUP_ENCRYPTION_KEY is required to decrypt this backup.")
         raw=Fernet(key.encode("ascii")).decrypt(raw)
-    if raw[:2]==b"\\x1f\\x8b": raw=gzip.decompress(raw)
+    if raw[:2] == bytes((31, 139)): raw = gzip.decompress(raw)
     payload=json.loads(raw.decode("utf-8"))
     if payload.get("format_version")!=1 or not isinstance(payload.get("tables"),list): raise ValueError("Unsupported or invalid backup format.")
     app=application or create_app()

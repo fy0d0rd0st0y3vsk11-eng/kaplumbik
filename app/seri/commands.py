@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.database import db
 from app.database.advanced_models import BotSetting
 from app.database.models import AuditLog
-from app.seri.models import StreakDay
+from app.seri.models import StreakContribution, StreakDay
 from app.seri.service import (
     GOAL, close_day, contribution_count, correct_contribution, get_channel_id,
     get_or_create_day, latest_streak_length, make_up_pending_days,
@@ -90,9 +90,9 @@ class SharedStreak(commands.Cog):
         app = create_app()
         with app.app_context():
             count = contribution_count(day_row)
-            ids = list(db.session.execute(select(__import__("app.seri.models", fromlist=["StreakContribution"]).StreakContribution.discord_id)
-                .where(__import__("app.seri.models", fromlist=["StreakContribution"]).StreakContribution.day_id == day_row.id)
-                .order_by(__import__("app.seri.models", fromlist=["StreakContribution"]).StreakContribution.first_message_at.asc())).scalars())
+            ids = list(db.session.execute(select(StreakContribution.discord_id)
+                .where(StreakContribution.day_id == day_row.id)
+                .order_by(StreakContribution.first_message_at.asc())).scalars())
             message_id = day_row.progress_message_id
             paused = db.session.execute(select(StreakDay.id).where(
                 StreakDay.day < day_row.day, StreakDay.status == "pending"
@@ -152,9 +152,9 @@ class SharedStreak(commands.Cog):
                 count = contribution_count(day_row)
                 status = day_row.status
                 streak = latest_streak_length()
-                ids = list(db.session.execute(select(__import__("app.seri.models", fromlist=["StreakContribution"]).StreakContribution.discord_id)
-                    .where(__import__("app.seri.models", fromlist=["StreakContribution"]).StreakContribution.day_id == day_row.id)
-                    .order_by(__import__("app.seri.models", fromlist=["StreakContribution"]).StreakContribution.first_message_at.asc())).scalars())
+                ids = list(db.session.execute(select(StreakContribution.discord_id)
+                    .where(StreakContribution.day_id == day_row.id)
+                    .order_by(StreakContribution.first_message_at.asc())).scalars())
             if not summary_id:
                 names = " ".join(f"<@{member_id}>" for member_id in ids) or "Katkı yok."
                 if status == "completed":

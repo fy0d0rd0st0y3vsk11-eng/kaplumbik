@@ -115,3 +115,14 @@ class FeaturePermission(db.Model):
     updated_by=db.Column(db.String(25),nullable=True)
     updated_at=db.Column(db.DateTime(timezone=True),nullable=False,default=utc_now,onupdate=utc_now)
     __table_args__=(db.UniqueConstraint("module_key","discord_role_id",name="uq_feature_permission_role"),)
+
+class ServerMemoryProposal(db.Model):
+    __tablename__ = "server_memory_proposals"
+    id=db.Column(db.Integer,primary_key=True)
+    guild_id=db.Column(db.String(25),nullable=False,index=True)
+    proposer_id=db.Column(db.String(25),nullable=False,index=True)
+    content=db.Column(db.String(1000),nullable=False)
+    status=db.Column(db.String(20),nullable=False,default="pending",index=True)
+    reviewed_by=db.Column(db.String(25),nullable=True)
+    created_at=db.Column(db.DateTime(timezone=True),nullable=False,default=utc_now)
+    reviewed_at=db.Column(db.DateTime(timezone=True),nullable=True)

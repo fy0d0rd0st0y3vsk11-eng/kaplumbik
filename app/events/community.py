@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from sqlalchemy import select, func, update
 from sqlalchemy.exc import IntegrityError
 from app import create_app
@@ -76,6 +76,9 @@ class PollView(discord.ui.View):
 
 class MahzenCommunity(commands.Cog):
     def __init__(self, bot): self.bot=bot
+    async def cog_load(self):
+        if not self.expire_shop_items.is_running(): self.expire_shop_items.start()
+    def cog_unload(self): self.expire_shop_items.cancel()
 
 
     @app_commands.command(name="takvim", description="Önümüzdeki 7 günün Mahzen etkinlik takvimini göster.")
@@ -427,6 +430,37 @@ class MahzenCommunity(commands.Cog):
         except Exception:
             db.session.rollback(); log.exception("Shop purchase failed")
             if not interaction.response.is_done(): await interaction.response.send_message("Satın alma tamamlanamadı. İşlem kaydı kontrol edilmeli.",ephemeral=True)
+
+
+    @tasks.loop(minutes=15)
+    async def expire_shop_items(self):
+        await self.bot.wait_until_ready()
+        app=create_app()
+        with app.app_context():
+            rows=db.session.execute(select(MemberCollectionItem,RewardShopItem).join(RewardShopItem,MemberCollectionItem.item_key==RewardShopItem.key).where(MemberCollectionItem.expires_at.is_not(None),MemberCollectionItem.expires_at<=utcnow())).all()
+            snapshot=[(entry.id,entry.discord_id,entry.item_key,item.item_type,item.discord_role_id) for entry,item in rows]
+        for entry_id,discord_id,item_key,item_type,role_id in snapshot:
+            if item_type=="role" and role_id and role_id.isdigit():
+                member=None; guild_for_member=None
+                for guild in self.bot.guilds:
+                    member=guild.get_member(int(discord_id))
+                    if member: guild_for_member=guild; break
+                if member and guild_for_member:
+                    role=guild_for_member.get_role(int(role_id))
+                    if role and role in member.roles:
+                        try: await member.remove_roles(role,reason="Kaplumbik shop role expired")
+                        except discord.HTTPException:
+                            log.exception("Could not remove expired shop role %s from %s",role_id,discord_id)
+                            continue
+            app=create_app()
+            with app.app_context():
+                row=db.session.get(MemberCollectionItem,entry_id)
+                if row:
+                    db.session.add(AuditLog(actor_discord_id="kaplumbik",action="shop.item_expired",target_type="member_collection",target_id=f"{discord_id}:{item_key}",details={"type":item_type},success=True))
+                    db.session.delete(row); db.session.commit()
+
+    @expire_shop_items.before_loop
+    async def before_expire_shop_items(self): await self.bot.wait_until_ready()
 
     @commands.Cog.listener()
     async def on_message(self, message):

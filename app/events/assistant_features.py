@@ -212,7 +212,8 @@ def _ai_request(prompt: str, personality: str, knowledge: str = "") -> str:
     if not api_key:
         raise RuntimeError("OPENROUTER_API_KEY ayarlanmamış.")
 
-    primary_model = (settings.openrouter_model or "openai/gpt-4o-mini").strip() or "openai/gpt-4o-mini"
+    configured_model = _setting("openrouter_model", settings.openrouter_model or "openai/gpt-4o-mini")
+    primary_model = (configured_model or settings.openrouter_model or "openai/gpt-4o-mini").strip() or "openai/gpt-4o-mini"
     models = list(dict.fromkeys([primary_model, "openai/gpt-4o-mini"]))
     custom_personality = (personality or "").strip()
     system_prompt = CORE_PERSONALITY
@@ -276,6 +277,18 @@ def _ai_request(prompt: str, personality: str, knowledge: str = "") -> str:
                 answer = ""
 
             if answer:
+                usage = data.get("usage", {}) if isinstance(data, dict) else {}
+                if isinstance(usage, dict) and usage:
+                    usage_detail = (
+                        f"model={model}; prompt_tokens={usage.get('prompt_tokens', 'n/a')}; "
+                        f"completion_tokens={usage.get('completion_tokens', 'n/a')}; "
+                        f"total_tokens={usage.get('total_tokens', 'n/a')}; "
+                        f"cost={usage.get('cost', 'not returned by provider')}"
+                    )
+                    try:
+                        _health("ai_usage", "ok", usage_detail[:500])
+                    except Exception:
+                        logger.exception("Could not save AI usage telemetry.")
                 return answer[:1850]
 
             finish_reason = choice.get("finish_reason") if choice else None

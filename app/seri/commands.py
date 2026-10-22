@@ -63,8 +63,8 @@ class SharedStreak(commands.Cog):
     async def cog_load(self):
         app = create_app()
         with app.app_context():
-            if not _setting("streak_tracking_started_date"):
-                _set_setting("streak_tracking_started_date", local_today().isoformat())
+            from app.seri.service import ensure_tracking_started_date
+            ensure_tracking_started_date("kaplumbik")
         if not self.daily_closure.is_running():
             self.daily_closure.start()
 
@@ -196,15 +196,16 @@ class SharedStreak(commands.Cog):
             today = now.date()
             yesterday = today - timedelta(days=1)
             start_value = _setting("streak_tracking_started_date")
+            channel_value = get_channel_id()
+            source_channels = get_source_channel_ids()
+            if not channel_value or not source_channels:
+                return
             if not start_value:
                 _set_setting("streak_tracking_started_date", today.isoformat())
                 return
             start_day = date.fromisoformat(start_value)
             last_value = _setting("streak_last_closed_date")
             cursor = date.fromisoformat(last_value) + timedelta(days=1) if last_value else start_day
-            channel_value = get_channel_id()
-        if not channel_value:
-            return
         channel = self.bot.get_channel(int(channel_value))
         if channel is None:
             try:

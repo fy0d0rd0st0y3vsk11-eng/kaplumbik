@@ -89,8 +89,20 @@ class PollView(discord.ui.View):
 class MahzenCommunity(commands.Cog):
     def __init__(self, bot): self.bot=bot
     async def cog_load(self):
-        if not self.expire_shop_items.is_running(): self.expire_shop_items.start()
-    def cog_unload(self): self.expire_shop_items.cancel()
+        if not self.expire_shop_items.is_running():
+            self.expire_shop_items.start()
+        app = create_app()
+        with app.app_context():
+            polls = db.session.execute(select(CommunityPoll).where(CommunityPoll.status == "open")).scalars().all()
+            active = [(poll.id, list(poll.options), poll.message_id) for poll in polls]
+        for poll_id, options, message_id in active:
+            try:
+                self.bot.add_view(PollView(poll_id, options), message_id=int(message_id) if message_id else None)
+            except (ValueError, discord.HTTPException):
+                log.exception("Could not restore persistent poll view %s", poll_id)
+
+    def cog_unload(self):
+        self.expire_shop_items.cancel()
 
 
 
@@ -391,17 +403,6 @@ class MahzenCommunity(commands.Cog):
             db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="permissions.module_role",target_type="module",target_id=modul,details={"role_id":str(rol.id),"can_manage":yonetebilir},success=True)); db.session.commit()
         await interaction.response.send_message(f"{rol.name} rolünün {modul} izni güncellendi. Discord'un yerleşik izinleri yine geçerlidir.",ephemeral=True)
 
-
-    async def cog_load(self):
-        app=create_app()
-        with app.app_context():
-            polls=db.session.execute(select(CommunityPoll).where(CommunityPoll.status=="open")).scalars().all()
-            active=[(p.id,list(p.options),p.message_id) for p in polls]
-        for poll_id,options,message_id in active:
-            try:
-                self.bot.add_view(PollView(poll_id,options), message_id=int(message_id) if message_id else None)
-            except (ValueError, discord.HTTPException):
-                log.exception("Could not restore persistent poll view %s",poll_id)
 
     @app_commands.command(name="goreval", description="Tamamladığın haftalık görevin puanını al.")
     async def claim_quest(self, interaction: discord.Interaction, gorev: int):

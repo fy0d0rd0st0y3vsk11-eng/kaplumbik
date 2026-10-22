@@ -54,3 +54,24 @@ Yönetim paneline gerçek sunucuda erişim açılmadan önce Discord OAuth2 otur
 - `/serikatkiduzelt` — yalnızca tanımlı sunucu sahibinin, gerekçe kaydıyla katkı düzeltmesini sağlar.
 
 Günlük hedef Europe/Istanbul saatine göre 00.00'da yenilenir; farklı gerçek üyelerden 3 mesaj hedefi vardır. Botlar/webhook'lar sayılmaz, aynı üye günde bir kez sayılır. Katkılar ve denetim kayıtları SQL veritabanında tutulur. Bu özellik şu anda `feature/shared-streak-system` dalında geliştirilmekte ve test edilmektedir; ana dala henüz alınmamıştır.
+
+
+## Render production checklist
+
+- Deploy as a normal Render Web Service using the repository's existing start command; do not commit tokens or OAuth secrets.
+- Set `APP_ENV=production`, `SECRET_KEY`, `DISCORD_TOKEN`, `OWNER_DISCORD_ID`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and the exact public `DISCORD_REDIRECT_URI`.
+- Set `DATABASE_URL` to a persistent PostgreSQL service. The free web service filesystem is not durable; do not rely on local SQLite for production state.
+- Set `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` only if AI is enabled. Keep secrets in Render environment settings, never in Git.
+- Enable the Discord Message Content and Server Members intents only if needed in the Discord Developer Portal. Invite the bot with applications.commands and required bot permissions.
+- Verify OAuth redirect URL, database persistence, command registration, channel permissions, and restore from backup before inviting members to rely on the bot.
+
+## Community commands added on feature branch
+
+- `/oyunprofil`, `/oyunarkadasi`: opt-in member game profile and matching.
+- `/anket`: button-based polls with one mutable vote per member.
+- `/onerigonder`, `/onerioyla`, `/oneridurum`: suggestion intake, cooldown, voting and admin status flow.
+- `/gorevler`, `/goreval`: weekly personal/shared quest progress and idempotent reward claim.
+- `/dukkan`, `/dukkanurunekle`, `/dukkanal`, `/koleksiyon`: reward shop and member collection.
+- `/modulizin`: owner-only role/module permission configuration record.
+
+The module-permission record is not a substitute for enforcing permissions on every dashboard route and command. Those enforcement paths and remaining planned dashboard features must be reviewed before production rollout.

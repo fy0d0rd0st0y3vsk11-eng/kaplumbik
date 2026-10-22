@@ -58,6 +58,7 @@ class SharedStreak(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._started = False
+        self._history_backfilled = False
 
     async def cog_load(self):
         app = create_app()
@@ -69,6 +70,65 @@ class SharedStreak(commands.Cog):
 
     def cog_unload(self):
         self.daily_closure.cancel()
+
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        if self._history_backfilled:
+            return
+        self._history_backfilled = True
+        try:
+            await self._backfill_accessible_history()
+        except Exception:
+            logger.exception("Seri geçmişini bot açılışında taramak başarısız oldu.")
+
+    async def _backfill_accessible_history(self):
+        app=create_app()
+        with app.app_context():
+            source_ids=get_source_channel_ids()
+            last_value=_setting("streak_last_closed_date")
+            start_value=_setting("streak_tracking_started_date")
+            start_day=date.fromisoformat(last_value)+timedelta(days=1) if last_value else (date.fromisoformat(start_value) if start_value else local_today())
+            output_id=get_channel_id()
+        if not source_ids or not output_id:
+            return
+        today=local_today()
+        if start_day>today:
+            return
+        after=datetime.combine(start_day,datetime.min.time(),tzinfo=TZ).astimezone(timezone.utc)
+        before=datetime.now(timezone.utc)
+        contributions={}
+        for channel_id in source_ids:
+            channel=self.bot.get_channel(int(channel_id))
+            if channel is None:
+                try: channel=await self.bot.fetch_channel(int(channel_id))
+                except discord.HTTPException:
+                    logger.warning("Seri geçmişi taranamadı; kanal erişilemiyor: %s",channel_id); continue
+            if not hasattr(channel,"history"):
+                continue
+            try:
+                async for message in channel.history(limit=None,after=after,before=before,oldest_first=True):
+                    if message.guild is None or message.author.bot or message.webhook_id is not None:
+                        continue
+                    day=message.created_at.astimezone(TZ).date()
+                    if day<start_day or day>today:
+                        continue
+                    key=(day,str(message.author.id))
+                    contributions.setdefault(key,(str(channel.id),str(message.id)))
+            except (discord.Forbidden,discord.HTTPException):
+                logger.exception("Seri geçmişi okunamadı: channel=%s",channel_id)
+        app=create_app()
+        with app.app_context():
+            changed_days=set()
+            for (day,discord_id),(channel_id,message_id) in contributions.items():
+                _,added=record_contribution(day,discord_id,channel_id,message_id)
+                if added: changed_days.add(day)
+            if changed_days:
+                logger.info("Seri geçmişinden %s katkı kaydı geri kazanıldı.",len(changed_days))
+            today_row=db.session.execute(select(StreakDay).where(StreakDay.day==today.isoformat())).scalar_one_or_none()
+            output_channel=self.bot.get_channel(int(output_id))
+        if today_row and output_channel:
+            await self._update_progress(output_channel,today_row)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):

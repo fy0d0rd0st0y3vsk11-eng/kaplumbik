@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta
 
 import discord
 import requests
+from sqlalchemy import select
 from discord.ext import commands, tasks
 
 from app import create_app
@@ -70,7 +71,7 @@ def _save_conversation_memory(guild_id: str, channel_id: str | None, discord_id:
             ConversationMemory.created_at < cutoff,
         ).delete(synchronize_session=False)
         overflow_ids = list(db.session.execute(
-            __import__("sqlalchemy").select(ConversationMemory.id)
+            select(ConversationMemory.id)
             .where(ConversationMemory.guild_id == str(guild_id or "dm"), ConversationMemory.discord_id == str(discord_id))
             .order_by(ConversationMemory.created_at.desc(), ConversationMemory.id.desc())
             .offset(1000)

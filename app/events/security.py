@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -61,6 +62,7 @@ class SecurityCog(commands.Cog):
     def __init__(self,bot):
         self.bot=bot
         self.joins=deque()
+        self.deletions=deque()
 
     async def cog_load(self):
         self.bot.add_view(VerificationView())
@@ -118,6 +120,49 @@ class SecurityCog(commands.Cog):
             log.exception("Member join security flow failed for %s",member.id)
         if raid:
             await self.alert_owner(f"🚨 Mahzen anti-raid kilidi açıldı: 30 saniyede {len(self.joins)} yeni üye. Yeni üyeler varsa kısıtlı role alınır. Kilidi yalnızca sen, son katılımdan 30 dakika geçtikten sonra kaldırabilirsin.")
+
+
+    async def _handle_nuke_event(self,guild,action,target_id):
+        now=datetime.now(timezone.utc)
+        while self.deletions and (now-self.deletions[0][0]).total_seconds()>60: self.deletions.popleft()
+        self.deletions.append((now,action,str(target_id)))
+        app=create_app()
+        with app.app_context():
+            set_setting("nuke_last_delete_at",now.isoformat())
+            raw=setting("nuke_lockdown_until","")
+            try: active=bool(raw and datetime.fromisoformat(raw)>now)
+            except ValueError: active=False
+            triggered=len(self.deletions)>=3 and not active
+            if triggered:
+                set_setting("nuke_lockdown_until",(now+timedelta(minutes=30)).isoformat())
+                db.session.add(AuditLog(actor_discord_id="kaplumbik",action="security.anti_nuke_alert",target_type="guild",target_id=str(guild.id),details={"deletions_last_minute":len(self.deletions),"last_action":action},success=True)); db.session.commit()
+        if not triggered: return
+        await asyncio.sleep(1)
+        audit_action=discord.AuditLogAction.channel_delete if action=="channel_delete" else discord.AuditLogAction.role_delete
+        actor=None
+        try:
+            async for entry in guild.audit_logs(limit=8,action=audit_action):
+                if getattr(entry.target,"id",None)==int(target_id) and (now-entry.created_at.astimezone(timezone.utc)).total_seconds()<20:
+                    actor=entry.user; break
+        except discord.Forbidden:
+            log.warning("Missing View Audit Log permission for anti-nuke actor identification.")
+        if actor and not actor.bot and not actor.guild_permissions.administrator and str(actor.id)!=str(settings.owner_discord_id):
+            app=create_app()
+            with app.app_context(): restricted_id=setting("restricted_role_id","")
+            role=guild.get_role(int(restricted_id)) if restricted_id.isdigit() else None
+            member=guild.get_member(actor.id)
+            if role and member:
+                try: await member.add_roles(role,reason="Kaplumbik anti-nuke restriction; owner review required")
+                except discord.HTTPException: log.exception("Could not restrict suspected nuke actor.")
+        await self.alert_owner(f"🚨 Anti-nuke uyarısı: 60 saniyede {len(self.deletions)} rol/kanal silme olayı görüldü. Son işlem: {action} · hedef ID {target_id}. Şüpheli aktör: {actor} ({getattr(actor,'id','bilinmiyor')}). Kontrol etmeden kilidi kaldırma.")
+
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self,channel):
+        await self._handle_nuke_event(channel.guild,"channel_delete",channel.id)
+
+    @commands.Cog.listener()
+    async def on_guild_role_delete(self,role):
+        await self._handle_nuke_event(role.guild,"role_delete",role.id)
 
     @commands.Cog.listener()
     async def on_message(self,message):
@@ -189,14 +234,20 @@ class SecurityCog(commands.Cog):
             await interaction.response.send_message("Anti-raid kilidini yalnızca sunucu sahibi kaldırabilir.",ephemeral=True); return
         app=create_app()
         with app.app_context():
-            raw=setting("raid_last_join_at","")
-            try: last=datetime.fromisoformat(raw)
-            except ValueError: last=None
-            if last and last.tzinfo is None: last=last.replace(tzinfo=timezone.utc)
+            raw_values=[setting("raid_last_join_at",""),setting("nuke_last_delete_at","")]
+            latest=[]
+            for raw in raw_values:
+                try:
+                    parsed=datetime.fromisoformat(raw) if raw else None
+                    if parsed and parsed.tzinfo is None: parsed=parsed.replace(tzinfo=timezone.utc)
+                    if parsed: latest.append(parsed)
+                except ValueError: pass
+            last=max(latest) if latest else None
             if last and datetime.now(timezone.utc)-last<timedelta(minutes=30):
                 remaining=timedelta(minutes=30)-(datetime.now(timezone.utc)-last)
-                await interaction.response.send_message(f"Son yeni üyeden sonra 30 dakika dolmadı. Yaklaşık {max(1,int(remaining.total_seconds()/60))} dakika daha bekle.",ephemeral=True); return
+                await interaction.response.send_message(f"Son raid/nuke belirtisinden sonra 30 dakika dolmadı. Yaklaşık {max(1,int(remaining.total_seconds()/60))} dakika daha bekle.",ephemeral=True); return
             set_setting("raid_lockdown_until","",interaction.user.id)
+            set_setting("nuke_lockdown_until","",interaction.user.id)
             db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="security.raid_unlocked",target_type="guild",target_id=str(interaction.guild_id),details={},success=True)); db.session.commit()
         await interaction.response.send_message("Anti-raid kilidi kaldırıldı. Güvenlik kaydı oluşturuldu.",ephemeral=True)
 

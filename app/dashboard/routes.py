@@ -5,6 +5,7 @@ from functools import wraps
 from zoneinfo import ZoneInfo
 
 import discord
+import requests
 from authlib.integrations.flask_client import OAuth
 from werkzeug.exceptions import HTTPException
 
@@ -22,6 +23,8 @@ from app.core.config import settings
 from app.database import db
 from app.database.event_models import Event, EventParticipation
 from app.database.models import AuditLog, EconomyTransaction, UserProfile
+from app.database.advanced_models import AnnouncementLog
+from app.events.feature_service import get_setting
 from app.economy.service import (
     DuplicateTransactionError,
     UserNotFoundError,
@@ -165,6 +168,34 @@ def _require_csrf():
     supplied = request.form.get("csrf_token", "")
     if not expected or not supplied or not secrets.compare_digest(expected, supplied):
         abort(400, description="Form güvenlik doğrulaması başarısız.")
+
+
+
+def _notify_event_change(event, action):
+    channel_id = get_setting("announcement_channel_id", "")
+    if not channel_id.isdigit() or not settings.discord_token:
+        return False
+    starts_at = event.starts_at
+    if starts_at.tzinfo is None:
+        starts_at = starts_at.replace(tzinfo=timezone.utc)
+    content = f"📣 Mahzen etkinlik bildirimi: **{discord.utils.escape_markdown(event.title)}** — {action}. Başlangıç: {starts_at.astimezone(ZoneInfo('Europe/Istanbul')).strftime('%d.%m.%Y %H:%M')} (Türkiye saati)."
+    try:
+        response = requests.post(
+            f"https://discord.com/api/v10/channels/{channel_id}/messages",
+            headers={"Authorization": f"Bot {settings.discord_token}", "Content-Type": "application/json"},
+            json={"content": content[:1900], "allowed_mentions": {"parse": []}},
+            timeout=8,
+        )
+        response.raise_for_status()
+        data = response.json()
+        db.session.add(AnnouncementLog(event_id=event.id, channel_id=channel_id, kind=f"event_{action}", message=content[:4000], success=True))
+        db.session.commit()
+        return True
+    except Exception as exc:
+        logger.exception("Event change notification failed")
+        db.session.add(AnnouncementLog(event_id=event.id, channel_id=channel_id, kind=f"event_{action}", message=content[:4000], success=False, error=str(exc)[:500]))
+        db.session.commit()
+        return False
 
 
 def owner_required(view):
@@ -359,6 +390,37 @@ def adjust_points_route():
     return redirect(url_for("dashboard.index"))
 
 
+
+@dashboard_bp.post("/events/<int:event_id>/edit")
+@owner_required
+def edit_event_route(event_id):
+    _require_csrf()
+    try:
+        event = db.session.get(Event, event_id)
+        if event is None:
+            raise ValueError("Etkinlik bulunamadı.")
+        title = request.form.get("title", "").strip()[:150]
+        game = request.form.get("game", "").strip()[:80]
+        local_start = datetime.fromisoformat(request.form.get("starts_at", ""))
+        if local_start.tzinfo is None:
+            local_start = local_start.replace(tzinfo=ZoneInfo("Europe/Istanbul"))
+        if not title or not game or local_start.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+            raise ValueError("Başlık, oyun ve gelecekte bir başlangıç zamanı zorunlu.")
+        event.title, event.game = title, game
+        event.starts_at = local_start.astimezone(timezone.utc)
+        event.description = request.form.get("description", "").strip()[:2000]
+        event.game_link = request.form.get("game_link", "").strip()[:500]
+        db.session.add(AuditLog(actor_discord_id=str(session["discord_id"]),action="event.edit",target_type="event",target_id=str(event.id),details={"title":title,"game":game},success=True))
+        db.session.commit()
+        _notify_event_change(event, "değiştirildi")
+        flash(f"Etkinlik #{event.id} güncellendi; bildirim ayarlıysa duyuru kanalına gönderildi.")
+    except Exception as exc:
+        db.session.rollback()
+        logger.exception("Dashboard event edit failed.")
+        flash(f"Etkinlik güncellenemedi: {str(exc)[:180]}")
+    return redirect(url_for("dashboard.index"))
+
+
 @dashboard_bp.post("/events/<int:event_id>/cancel")
 @owner_required
 def cancel_event_route(event_id):
@@ -370,7 +432,8 @@ def cancel_event_route(event_id):
             target_type="event", target_id=str(event.id), details={}, success=True,
         ))
         db.session.commit()
-        flash(f"Etkinlik #{event.id} iptal edildi; geçmiş kaydı korundu.")
+        _notify_event_change(event, "iptal edildi")
+        flash(f"Etkinlik #{event.id} iptal edildi; geçmiş kaydı korundu ve bildirim ayarlıysa duyuru kanalına gönderildi.")
     except Exception as exc:
         db.session.rollback()
         logger.exception("Dashboard event cancellation failed.")

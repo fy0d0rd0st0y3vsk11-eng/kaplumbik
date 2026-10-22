@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, func, update
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +14,35 @@ GOAL = 3
 
 def _day_key(day: date) -> str:
     return day.isoformat()
+
+
+
+def ensure_tracking_started_date(actor_discord_id: str = "kaplumbik") -> str:
+    """Start streak history only after both output and source channels are configured."""
+    if not get_channel_id() or not get_source_channel_ids():
+        return ""
+    start_row = db.session.get(BotSetting, "streak_tracking_started_date")
+    last_row = db.session.get(BotSetting, "streak_last_closed_date")
+    day_count = db.session.scalar(select(func.count(StreakDay.id))) or 0
+    if start_row is not None and start_row.value and (last_row is not None and last_row.value or day_count):
+        return start_row.value
+    today = datetime.now(ZoneInfo("Europe/Istanbul")).date().isoformat()
+    if start_row is None:
+        start_row = BotSetting(key="streak_tracking_started_date", value=today)
+        db.session.add(start_row)
+    else:
+        start_row.value = today
+    start_row.updated_by = str(actor_discord_id)
+    db.session.add(AuditLog(
+        actor_discord_id=str(actor_discord_id),
+        action="streak.tracking_started",
+        target_type="streak",
+        target_id=today,
+        details={"source_channels": sorted(get_source_channel_ids()), "output_channel": get_channel_id()},
+        success=True,
+    ))
+    db.session.commit()
+    return today
 
 
 def get_or_create_day(day: date) -> StreakDay:
@@ -210,6 +240,7 @@ def set_channel_id(channel_id: str, actor_discord_id: str) -> None:
     db.session.add(AuditLog(actor_discord_id=str(actor_discord_id), action="streak.channel_set",
         target_type="channel", target_id=value, details={}, success=True))
     db.session.commit()
+    ensure_tracking_started_date(actor_discord_id)
 
 
 def get_source_channel_ids() -> set[str]:
@@ -237,4 +268,5 @@ def set_source_channel(channel_id: str, add: bool, actor_discord_id: str) -> set
     db.session.add(AuditLog(actor_discord_id=str(actor_discord_id), action="streak.source_channels_set",
         target_type="channel", target_id=value, details={"add": add, "channels": sorted(channels, key=int)}, success=True))
     db.session.commit()
+    ensure_tracking_started_date(actor_discord_id)
     return channels

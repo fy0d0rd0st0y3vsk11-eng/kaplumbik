@@ -16,8 +16,8 @@ from app.database.models import AuditLog
 from app.seri.models import StreakContribution, StreakDay
 from app.seri.service import (
     GOAL, close_day, contribution_count, correct_contribution, get_channel_id,
-    get_or_create_day, latest_streak_length, make_up_pending_days,
-    record_contribution, set_channel_id,
+    get_or_create_day, get_source_channel_ids, latest_streak_length, make_up_pending_days,
+    record_contribution, set_channel_id, set_source_channel,
 )
 
 logger = logging.getLogger("kaplumbik.seri")
@@ -76,15 +76,23 @@ class SharedStreak(commands.Cog):
             return
         app = create_app()
         with app.app_context():
-            channel_id = get_channel_id()
-            if not channel_id or str(message.channel.id) != channel_id:
+            source_channels = get_source_channel_ids()
+            output_channel_id = get_channel_id()
+            if not source_channels or str(message.channel.id) not in source_channels or not output_channel_id:
                 return
             today = local_today()
             row, added = record_contribution(
                 today, str(message.author.id), str(message.channel.id), str(message.id)
             )
             if added:
-                await self._update_progress(message.channel, row)
+                output_channel = self.bot.get_channel(int(output_channel_id))
+                if output_channel is None:
+                    try:
+                        output_channel = await self.bot.fetch_channel(int(output_channel_id))
+                    except discord.HTTPException:
+                        logger.exception("Seri çıktı kanalı alınamadı.")
+                        return
+                await self._update_progress(output_channel, row)
 
     async def _update_progress(self, channel, day_row: StreakDay):
         app = create_app()
@@ -194,10 +202,14 @@ class SharedStreak(commands.Cog):
             channel_id = get_channel_id()
             db.session.commit()
         channel_text = f"<#{channel_id}>" if channel_id else "Henüz ayarlanmamış"
+        app = create_app()
+        with app.app_context():
+            source_ids = sorted(get_source_channel_ids(), key=int)
+        source_text = ", ".join(f"<#{item}>" for item in source_ids) or "Henüz ayarlanmamış"
         pending_text = ", ".join(day.day for day in pending[-10:]) or "Yok"
         await interaction.response.send_message(
             f"🐢 **Mahzen ortak serisi**\nBugün: **{count}/{GOAL}** farklı üye\n"
-            f"Mevcut seri: **{streak} gün**\nTelafi bekleyen günler: {pending_text}\nSeri kanalı: {channel_text}",
+            f"Mevcut seri: **{streak} gün**\nTelafi bekleyen günler: {pending_text}\nSeri kanalı: {channel_text}\nSayılacak sohbet kanalları: {source_text}",
             ephemeral=False, allowed_mentions=discord.AllowedMentions.none(),
         )
 
@@ -210,7 +222,24 @@ class SharedStreak(commands.Cog):
         app = create_app()
         with app.app_context():
             set_channel_id(str(kanal.id), str(interaction.user.id))
-        await interaction.response.send_message(f"Seri kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
+        permissions = kanal.permissions_for(interaction.guild.me) if interaction.guild and interaction.guild.me else None
+        if permissions is None or not permissions.view_channel or not permissions.send_messages or not permissions.read_message_history:
+            await interaction.response.send_message("Botun bu kanalda Görüntüle, Mesaj Gönder ve Mesaj Geçmişini Oku izinleri olmalı.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"Seri ilerlemesi ve özet kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
+
+    @app_commands.command(name="serikaynakkanal", description="Ortak seri sayacına katkı sağlayan sohbet kanalını ekle veya çıkar.")
+    @app_commands.describe(kanal="Mesajları sayılacak sohbet kanalı", ekle="True: ekle, False: çıkar")
+    async def streak_source_channel(self, interaction: discord.Interaction, kanal: discord.TextChannel, ekle: bool):
+        if not _is_owner_or_admin(interaction):
+            await interaction.response.send_message("Bu işlem sunucu sahibi veya Administrator yetkisi gerektirir.", ephemeral=True)
+            return
+        app = create_app()
+        with app.app_context():
+            channels = set_source_channel(str(kanal.id), ekle, str(interaction.user.id))
+        action = "eklendi" if ekle else "çıkarıldı"
+        channel_list = ", ".join(f"<#{item}>" for item in sorted(channels, key=int)) or "Hiç kaynak kanalı yok"
+        await interaction.response.send_message(f"{kanal.mention} kaynak listesinden {action}.\nKaynak kanallar: {channel_list}", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @app_commands.command(name="seritelafi", description="En eski değil, en son telafi bekleyen günleri telafi et.")
     @app_commands.describe(gun_sayisi="Telafi edilecek son bekleyen gün sayısı")

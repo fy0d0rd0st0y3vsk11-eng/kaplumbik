@@ -303,14 +303,6 @@ class AssistantFeatures(commands.Cog):
         if not content:
             return
 
-        # Deterministic in-group meme reactions requested by the owner.
-        if _is_swearing(content):
-            await message.reply("Panal atar.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
-            return
-        if _mentions_ruyar(content):
-            await message.reply("Ruyiş pro", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
-            return
-
         if any(term in lowered for term in ("realms link", "realms bağlantı", "realms linki", "minecraft link")):
             link = await asyncio.to_thread(_setting, "minecraft_realms_link")
             if link:
@@ -404,7 +396,6 @@ class AssistantFeatures(commands.Cog):
                 )
                 async with message.channel.typing():
                     answer = await asyncio.to_thread(_ai_request, contextual_prompt, personality, knowledge)
-                answer = re.sub(r"\bo\s+sırada\b", "Osssurada", answer, flags=re.IGNORECASE)
                 await asyncio.to_thread(_save_conversation_memory, guild_id, channel_id, member_id, "Kaplumbik", "assistant", answer)
                 await message.reply(answer, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
                 await asyncio.to_thread(_health, "ai", "ok", "AI yanıtı üretildi.")

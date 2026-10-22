@@ -72,6 +72,18 @@ class KaplumbikBot(commands.Bot):
         await self.load_extension("app.events.scheduler")
         logger.info("Zamanlanmış duyuru sistemi yüklendi.")
 
+        await self.load_extension("app.seri.commands")
+        logger.info("Mahzen ortak seri sistemi yüklendi.")
+
+        await self.load_extension("app.events.community")
+        logger.info("Mahzen topluluk, oyun profili, anket, öneri ve görev sistemleri yüklendi.")
+
+        await self.load_extension("app.events.security")
+        logger.info("Mahzen doğrulama, anti-raid ve moderasyon güvenliği yüklendi.")
+
+        await self.load_extension("app.events.backups")
+        logger.info("Günlük veri tabanı yedekleme sistemi yüklendi.")
+
         # Slash komutlarını Discord'a kaydet.
         # Test sunucusu ID'si verilirse komutlar o sunucuda hemen görünür;
         # verilmezse global kayıt yapılır (yayılması daha uzun sürebilir).

@@ -1,13 +1,17 @@
 import logging
 import secrets
+import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+
+import requests
 
 from sqlalchemy import select
 
 from flask import flash, redirect, render_template_string, request, session, url_for
 
 from app.database import db
+from app.core.config import settings
 from app.database.advanced_models import AchievementDefinition, AnnouncementLog, BotSetting, Giveaway, GiveawayParticipant, PersonProfile
 from app.database.event_models import Event
 from app.database.models import AuditLog, UserProfile
@@ -32,20 +36,20 @@ def _local_time(value, fmt="%d.%m.%Y %H:%M"):
 SETTINGS_PAGE = """
 <!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kaplumbik gelişmiş ayarlar</title>
 <style>
-:root{color-scheme:dark;--bg:#0b0c13;--panel:#151725;--line:#30354c;--accent:#b6a0ff;--mint:#9ee7d7;--text:#f5f3ff;--muted:#aaaec4}
-*{box-sizing:border-box}body{font:15px/1.55 system-ui,-apple-system,sans-serif;background:radial-gradient(ellipse at 15% 0%,#292044 0,transparent 42%),radial-gradient(ellipse at 95% 12%,#153b3a 0,transparent 36%),var(--bg);color:var(--text);max-width:1120px;margin:26px auto;padding:0 16px 100px}
-h1{font-size:clamp(26px,4vw,38px);letter-spacing:-.04em;margin:12px 0 4px}h2{font-size:19px;margin:0 0 10px}section{background:linear-gradient(145deg,rgba(27,30,48,.96),rgba(17,19,31,.96));border:1px solid var(--line);border-radius:20px;padding:clamp(16px,3vw,25px);margin:17px 0;box-shadow:0 12px 32px #0002}
-label{display:block;color:#d1cde5;margin-top:12px;font-size:13px;font-weight:650}input,textarea,select{width:100%;padding:12px 13px;margin-top:5px;background:#0d0f19;color:var(--text);border:1px solid #3b3f59;border-radius:11px;font:inherit;outline:none}input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #b6a0ff20}textarea{min-height:100px;resize:vertical}
-button,.button,a.button{display:inline-flex;align-items:center;justify-content:center;gap:7px;margin-top:12px;padding:10px 15px;background:linear-gradient(110deg,var(--accent),#d2c6ff);color:#171322;border:0;border-radius:11px;font-weight:750;cursor:pointer;text-decoration:none}button:hover,.button:hover{filter:brightness(1.06);transform:translateY(-1px)}button.danger{background:#ffb7c4;color:#39101a}a{color:var(--mint)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}.muted{color:var(--muted)}.eyebrow{color:var(--mint);font-size:12px;text-transform:uppercase;letter-spacing:.14em;font-weight:800}.hero{padding:23px;border:1px solid #454061;border-radius:22px;background:linear-gradient(120deg,#2a2445cc,#152f32cc);margin:18px 0}.flash{padding:12px 15px;border:1px solid #6a5e93;background:#242039;border-radius:12px;margin:12px 0}.savebar{position:sticky;top:8px;z-index:5;padding:11px 14px;border-radius:14px;background:#151725ee;border:1px solid var(--line);backdrop-filter:blur(12px);display:flex;justify-content:space-between;gap:12px;align-items:center}.savebar[data-state="dirty"]{border-color:#d5ad59}.savebar[data-state="saved"]{border-color:#4b927e}.status{font-size:13px;color:var(--muted)}.person-card,.giveaway-card{padding:15px;border:1px solid #353951;border-radius:15px;background:#11131e;margin:12px 0}.pill{display:inline-block;border:1px solid #4a4d68;border-radius:999px;padding:3px 9px;color:var(--mint);font-size:12px}table{width:100%;border-collapse:collapse;display:block;overflow-x:auto}td,th{text-align:left;padding:10px;border-bottom:1px solid #303348;vertical-align:top;min-width:100px}th{color:#cbc4ee;font-size:12px;text-transform:uppercase;letter-spacing:.05em}.section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}@media(max-width:600px){body{margin:12px auto}.savebar{align-items:flex-start;flex-direction:column}}
+:root{color-scheme:light;--bg:#f5f3eb;--panel:#fffdf7;--line:#d9dfd0;--accent:#7b9271;--mint:#a6b99a;--text:#30382f;--muted:#737d70}
+*{box-sizing:border-box}body{font:15px/1.55 system-ui,-apple-system,sans-serif;background:radial-gradient(ellipse at 8% 0%,#e2e9d9 0,transparent 38%),radial-gradient(ellipse at 96% 10%,#efe3d0 0,transparent 36%),var(--bg);color:var(--text);max-width:1120px;margin:26px auto;padding:0 16px 100px}
+h1{font-size:clamp(26px,4vw,38px);letter-spacing:-.04em;margin:12px 0 4px}h2{font-size:19px;margin:0 0 10px}section{background:rgba(255,253,247,.94);color:var(--text);border:1px solid var(--line);border-radius:20px;padding:clamp(16px,3vw,25px);margin:17px 0;box-shadow:0 12px 32px #34412b0d}
+label{display:block;color:var(--muted);margin-top:12px;font-size:13px;font-weight:650}input,textarea,select{width:100%;padding:12px 13px;margin-top:5px;background:#fffefa;color:var(--text);border:1px solid var(--line);border-radius:11px;font:inherit;outline:none}input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px #7b927120}textarea{min-height:100px;resize:vertical}
+button,.button,a.button{display:inline-flex;align-items:center;justify-content:center;gap:7px;margin-top:12px;padding:10px 15px;background:linear-gradient(110deg,var(--accent),var(--mint));color:#172018;border:0;border-radius:11px;font-weight:750;cursor:pointer;text-decoration:none}button:hover,.button:hover{filter:brightness(1.06);transform:translateY(-1px)}button.danger{background:#ffb7c4;color:#39101a}a{color:#536c49}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}.muted{color:var(--muted)}.eyebrow{color:#536c49;font-size:12px;text-transform:uppercase;letter-spacing:.14em;font-weight:800}.hero{padding:23px;border:1px solid #454061;border-radius:22px;background:linear-gradient(120deg,#e2e9d9,#f7eddd);margin:18px 0}.flash{padding:12px 15px;border:1px solid #d9dfd0;background:#edf2e8;color:#30382f;border-radius:12px;margin:12px 0}.savebar{position:sticky;top:8px;z-index:5;padding:11px 14px;border-radius:14px;background:#fffdf7ee;border:1px solid var(--line);backdrop-filter:blur(12px);display:flex;justify-content:space-between;gap:12px;align-items:center}.savebar[data-state="dirty"]{border-color:#d5ad59}.savebar[data-state="saved"]{border-color:#4b927e}.status{font-size:13px;color:var(--muted)}.person-card,.giveaway-card{padding:15px;border:1px solid var(--line);border-radius:15px;background:#f8f7f0;margin:12px 0}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:#52664b;background:#edf2e8;font-size:12px}.preview{white-space:pre-wrap;overflow-wrap:anywhere;padding:14px;border:1px dashed var(--line);border-radius:12px;background:#f8f7f0;color:var(--text);font:inherit;min-height:70px}table{width:100%;border-collapse:collapse;display:block;overflow-x:auto}td,th{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top;min-width:100px}th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}.section-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}@media(max-width:600px){body{margin:12px auto}.savebar{align-items:flex-start;flex-direction:column}}
 </style></head><body>
 <div class="hero"><div class="eyebrow">MAHZEN CONTROL ROOM</div><h1>🐢 Kaplumbik Yönetim Merkezi</h1><p class="muted">Sunucunun oyunlarını, insanlarını, etkinliklerini ve çekilişlerini tek yerden yönet. Değişiklik uyarısı ve taslak kurtarma açık.</p></div>
 <div class="savebar" id="savebar" data-state="saved"><div><strong id="save-title">Her şey kayıtlı</strong><div class="status" id="save-detail">Değişiklik yaptığında burada görünecek.</div></div><span class="pill" id="save-count">0 bekleyen form</span></div>
 {% with messages = get_flashed_messages() %}{% for message in messages %}<div class="flash">{{ message }}</div>{% endfor %}{% endwith %}
 <a href="{{ url_for('dashboard.index') }}">← Ana panele dön</a>
 <form method="post" action="{{ url_for('dashboard.advanced_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<section><h2>AI kişiliği ve sunucu bilgisi</h2><label>AI kişilik talimatı</label><textarea name="ai_personality" maxlength="6000">{{ values.ai_personality }}</textarea><label>Kaplumbik'in sunucu hakkında bilmesi gerekenler</label><textarea name="server_knowledge" maxlength="6000" placeholder="Mahzen'in amacı, kanallar, oyunlar, kurallar ve botun görevleri...">{{ values.server_knowledge }}</textarea><p class="muted">Buraya yazdığın bilgiler AI cevaplarına bağlam olarak eklenir. Kişi tanıtımlarını aşağıdaki ayrı bölümden yönet.</p><label>Yeni üye karşılama metni</label><textarea name="new_member_intro" maxlength="3000">{{ values.new_member_intro }}</textarea><label>Tasarımcı Discord kullanıcı ID'si</label><input name="designer_discord_id" pattern="[0-9]{15,25}" value="{{ values.designer_discord_id }}"><label>Çekiliş için gereken minimum puan</label><input name="giveaway_min_points" type="number" min="0" max="10000000" value="{{ values.giveaway_min_points }}"></section>
+<section><h2>AI kişiliği ve sunucu bilgisi</h2><label>OpenRouter model kimliği</label><input name="openrouter_model" maxlength="150" value="{{ values.openrouter_model }}" placeholder="openai/gpt-4o-mini"><p class="muted">Boş bırakırsan OPENROUTER_MODEL ortam değişkeni, o da boşsa openai/gpt-4o-mini kullanılır. Kullanım bilgisi dönerse sağlık kayıtlarına model/token/maliyet olarak yazılır.</p><label>AI kişilik talimatı</label><textarea name="ai_personality" maxlength="6000">{{ values.ai_personality }}</textarea><label>Kaplumbik'in sunucu hakkında bilmesi gerekenler</label><textarea name="server_knowledge" maxlength="6000" placeholder="Mahzen'in amacı, kanallar, oyunlar, kurallar ve botun görevleri...">{{ values.server_knowledge }}</textarea><p class="muted">Buraya yazdığın bilgiler AI cevaplarına bağlam olarak eklenir. Kişi tanıtımlarını aşağıdaki ayrı bölümden yönet.</p><label>Yeni üye karşılama metni</label><textarea name="new_member_intro" maxlength="3000">{{ values.new_member_intro }}</textarea><label>Tasarımcı Discord kullanıcı ID'si</label><input name="designer_discord_id" pattern="[0-9]{15,25}" value="{{ values.designer_discord_id }}"><label>Çekiliş için gereken minimum puan</label><input name="giveaway_min_points" type="number" min="0" max="10000000" value="{{ values.giveaway_min_points }}"></section>
 <section><h2>Oyun bağlantıları</h2><label>Minecraft Realms bağlantısı</label><input name="minecraft_realms_link" type="url" maxlength="500" value="{{ values.minecraft_realms_link }}"><label>Gartic Phone bağlantısı</label><input name="gartic_phone_link" type="url" maxlength="500" value="{{ values.gartic_phone_link }}"><label>Among Us oda kodu</label><input name="among_us_room_code" maxlength="100" value="{{ values.among_us_room_code }}"></section>
-<section><h2>Duyuru ve hatırlatmalar</h2><label>Duyuru kanalı ID'si</label><input name="announcement_channel_id" pattern="[0-9]{15,25}" value="{{ values.announcement_channel_id }}"><label>Etkinlik duyuru kanalı ID'si (boşsa üstteki kullanılır)</label><input name="game_announcement_channel_id" pattern="[0-9]{0,25}" value="{{ values.game_announcement_channel_id }}"><label>Günlük hatırlatma metni (bot bunu aynen gönderir)</label><textarea name="daily_announcement_text" maxlength="1800">{{ values.daily_announcement_text }}</textarea><p class="muted">Metni boş bırakırsan günlük genel hatırlatma gönderilmez. Bot bu metni kendi cümleleriyle yeniden yazmaz.</p><label>Etkinlik duyuru şablonu (kendi yazın, yer tutucular otomatik doldurulur)</label><textarea name="event_announcement_template" maxlength="1800">{{ values.event_announcement_template }}</textarea><p class="muted">Kullanılabilir alanlar: {title}, {game}, {time}, {description}, {link}. Oda kodu herkese açık duyuruya eklenmez. Bunlar yalnızca etkinlik verileriyle değiştirilir; mesajın geri kalanı aynen korunur.</p><label>Günlük genel duyuru saatleri (Türkiye saati, virgülle; ör. 12:00,17:00,20:00)</label><input name="announcement_times" value="{{ values.announcement_times }}"><label>Başlangıçtan önce hatırlatma dakikaları (virgülle; ör. 15,5)</label><input name="game_reminder_minutes" value="{{ values.game_reminder_minutes }}"><label>Her duyuruda @everyone kullanılsın mı?</label><select name="announcement_everyone_ping"><option value="true" {% if values.announcement_everyone_ping == 'true' %}selected{% endif %}>Evet</option><option value="false" {% if values.announcement_everyone_ping != 'true' %}selected{% endif %}>Hayır</option></select><button type="submit">Ayarları kaydet</button></section></form>
+<section><h2>Duyuru ve hatırlatmalar</h2><label>Duyuru kanalı ID'si</label><input name="announcement_channel_id" pattern="[0-9]{15,25}" value="{{ values.announcement_channel_id }}"><label>Etkinlik duyuru kanalı ID'si (boşsa üstteki kullanılır)</label><input name="game_announcement_channel_id" pattern="[0-9]{0,25}" value="{{ values.game_announcement_channel_id }}"><label>Günlük hatırlatma metni (bot bunu aynen gönderir)</label><textarea name="daily_announcement_text" maxlength="1800">{{ values.daily_announcement_text }}</textarea><p class="muted">Metni boş bırakırsan günlük genel hatırlatma gönderilmez. Bot bu metni kendi cümleleriyle yeniden yazmaz.</p><label>Etkinlik duyuru şablonu (kendi yazın, yer tutucular otomatik doldurulur)</label><textarea name="event_announcement_template" maxlength="1800">{{ values.event_announcement_template }}</textarea><p class="muted">Kullanılabilir alanlar: {title}, {game}, {time}, {description}, {link}. Oda kodu herkese açık duyuruya eklenmez. Bunlar yalnızca etkinlik verileriyle değiştirilir; mesajın geri kalanı aynen korunur.</p><button type="button" id="announcement-preview-btn">Duyuru önizlemesini göster</button><pre id="announcement-preview" class="preview" aria-live="polite">Önizleme için düğmeye bas.</pre><label>Günlük genel duyuru saatleri (Türkiye saati, virgülle; ör. 12:00,17:00,20:00)</label><input name="announcement_times" value="{{ values.announcement_times }}"><label>Başlangıçtan önce hatırlatma dakikaları (virgülle; ör. 15,5)</label><input name="game_reminder_minutes" value="{{ values.game_reminder_minutes }}"><label>Her duyuruda @everyone kullanılsın mı?</label><select name="announcement_everyone_ping"><option value="true" {% if values.announcement_everyone_ping == 'true' %}selected{% endif %}>Evet</option><option value="false" {% if values.announcement_everyone_ping != 'true' %}selected{% endif %}>Hayır</option></select><button type="submit">Ayarları kaydet</button></section></form>
 <section><div class="section-head"><h2>👥 Kişi tanıtımları</h2><span class="pill">{{ people|length }} kayıt</span></div><p class="muted">Discord'da /kisitanit komutuyla üyeler listeden bir kişiyi seçebilir. Her profil ayrı kaydedilir.</p>
 <form id="person-new" method="post" action="{{ url_for('dashboard.person_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="grid"><div><label>Kişinin adı</label><input name="name" maxlength="100" required placeholder="Örn. Fedya"></div><div><label>Kişi hakkında paylaşılabilir bilgiler</label><textarea name="info" maxlength="4000" required placeholder="İlgi alanları, sunucudaki rolü, hobileri..."></textarea></div></div><button type="submit">＋ Kişiyi ekle ve kaydet</button></form>
 {% for person in people %}<div class="person-card"><form id="person-edit-{{ person.id }}" method="post" action="{{ url_for('dashboard.person_update', person_id=person.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="grid"><div><label>Kişinin adı</label><input name="name" maxlength="100" value="{{ person.name }}" required></div><div><label>Hakkında</label><textarea name="info" maxlength="4000" required>{{ person.info }}</textarea></div></div><button type="submit">Değişiklikleri kaydet</button></form><form id="person-delete-{{ person.id }}" method="post" action="{{ url_for('dashboard.person_delete', person_id=person.id) }}" onsubmit="return confirm('Bu kişi tanıtımını silmek istiyor musun?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Kişiyi sil</button></form></div>{% else %}<p class="muted">Henüz kişi tanıtımı eklenmedi.</p>{% endfor %}</section>
@@ -132,15 +136,177 @@ button,.button,a.button{display:inline-flex;align-items:center;justify-content:c
   window.addEventListener("beforeunload",e=>{if(dirty.size){e.preventDefault();e.returnValue="Kaydedilmemiş değişikliklerin var.";return e.returnValue;}});
   paint();
 })();
+</script><script>
+(function(){
+ const button=document.getElementById("announcement-preview-btn");
+ const field=document.querySelector('textarea[name="event_announcement_template"]');
+ const output=document.getElementById("announcement-preview");
+ if(!button||!field||!output)return;
+ button.addEventListener("click",function(){
+   let value=field.value.trim()||"📣 **{title}** · {game} · {time}\n{description}\n{link}";
+   const samples={title:"Mahzen Oyun Gecesi",game:"Among Us",time:"23.10.2026 20:00 (Türkiye saati)",description:"Birlikte oynuyoruz! Katılmak için etkinlik mesajındaki butonu kullan.",link:"https://example.com/mahzen"};
+   for(const [key,replacement] of Object.entries(samples))value=value.split("{"+key+"}").join(replacement);
+   output.textContent=value;
+ });
+})();
 </script></body></html>
 """
 
 SETTING_KEYS = (
-    "ai_personality", "server_knowledge", "daily_announcement_text", "event_announcement_template", "new_member_intro", "designer_discord_id",
+    "ai_personality", "server_knowledge", "openrouter_model", "daily_announcement_text", "event_announcement_template", "new_member_intro", "designer_discord_id",
     "giveaway_min_points", "minecraft_realms_link", "gartic_phone_link",
     "among_us_room_code", "announcement_channel_id", "game_announcement_channel_id",
     "announcement_times", "game_reminder_minutes", "announcement_everyone_ping",
 )
+
+
+
+COMMUNITY_SETTINGS_PAGE = """
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kaplumbik · Topluluk ayarları</title>
+<style>
+:root{color-scheme:light;--bg:#f5f3eb;--panel:#fffdf7;--line:#d9dfd0;--text:#30382f;--muted:#737d70;--accent:#7b9271}
+body{font:15px/1.6 system-ui,-apple-system,sans-serif;background:radial-gradient(ellipse at 8% 0%,#e2e9d9 0,transparent 38%),radial-gradient(ellipse at 96% 10%,#efe3d0 0,transparent 36%),var(--bg);color:var(--text);max-width:940px;margin:28px auto;padding:0 18px 80px}
+h1{font-size:clamp(26px,4vw,36px);letter-spacing:-.04em;margin:10px 0 4px}h2{font-size:19px;letter-spacing:-.02em;margin:4px 0 12px}
+section{background:rgba(255,253,247,.95);border:1px solid var(--line);border-radius:18px;padding:clamp(16px,3vw,24px);margin:16px 0;box-shadow:0 10px 28px #34412b0a}
+label{display:block;margin:12px 0 5px;color:var(--muted);font-weight:650;font-size:13px}input,select{font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;width:100%;background:#fffefa;color:var(--text)}input:focus,select:focus{outline:2px solid #7b927144;border-color:var(--accent)}
+button,.button{display:inline-block;background:linear-gradient(110deg,var(--accent),#a6b99a);color:#172018;border:0;border-radius:10px;padding:10px 14px;margin-top:12px;text-decoration:none;font-weight:750;cursor:pointer;transition:transform .15s ease,filter .15s ease}button:hover,.button:hover{filter:brightness(1.04);transform:translateY(-1px)}
+small,.muted{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.check{display:flex;gap:9px;align-items:center}.check input{width:auto}
+</style></head><body><h1>🐢 Kaplumbik · Panel kişiselleştirme</h1><p class="muted">Görünüm, ana sayfa kartları ve bakım modu. Bu ayarlar güvenlik izinlerinin yerine geçmez.</p>
+<a class="button" href="{{ url_for('dashboard.index') }}">Ana sayfa</a> <a class="button" href="{{ url_for('dashboard.advanced_index') }}">Gelişmiş ayarlar</a>
+{% for message in get_flashed_messages() %}<section>{{ message }}</section>{% endfor %}
+<section><form method="post" action="{{ url_for('dashboard.community_settings_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<h2>Görünüm</h2><label>Panel teması</label><select name="theme"><option value="sage" {% if theme=='sage' %}selected{% endif %}>Krem + adaçayı</option><option value="latte" {% if theme=='latte' %}selected{% endif %}>Latte + bej</option><option value="dark" {% if theme=='dark' %}selected{% endif %}>Koyu</option></select>
+<h2>Ana sayfa kartları</h2><div class="cards">
+{% for key,label in card_options %}<label class="check"><input type="checkbox" name="cards" value="{{ key }}" {% if key in cards %}checked{% endif %}>{{ label }}</label>{% endfor %}
+</div>
+<h2>Öneri kutusu</h2><label>Önerilerin yayımlanacağı kanal ID'si (boşsa komutun kullanıldığı kanal)</label><input name="suggestion_channel_id" inputmode="numeric" value="{{ suggestion_channel_id }}">
+<h2>Ortak seri</h2><label>İlerleme ve günlük özet kanalı ID'si</label><input name="streak_channel_id" inputmode="numeric" value="{{ streak_channel_id }}"><small>Henüz #seri yoksa aşağıdaki ayrı düğmeyle dashboard içinden oluşturabilir veya mevcut #seri kanalını seçebilirsin.</small><label>Sayılacak sohbet kanalı ID'leri (virgülle ayır)</label><input name="streak_source_channel_ids" value="{{ streak_source_channel_ids }}"><label>Her başarılı gün için üye başına ödül puanı (0–1000)</label><input name="streak_reward_points" type="number" min="0" max="1000" value="{{ streak_reward_points }}"><small>Botların değil, yalnızca gerçek üyelerin mesajları sayılır. Kaynak kanallarda botun View Channel ve Read Message History izinleri olmalı.</small>
+<h2>Bakım modu</h2><label class="check"><input type="checkbox" name="maintenance_mode" value="true" {% if maintenance_mode %}checked{% endif %}>Paneli bakım moduna al (sunucu sahibi yine erişebilir)</label>
+<button type="submit">Ayarları kaydet</button></form></section>
+<section><h2>🐢 Seri kanalını hazırla</h2><p class="muted">Bu işlem Mahzen sunucusunda metin kanalı oluşturma iznini kullanır. Aynı isimde #seri varsa yenisini açmak yerine mevcut kanalı seçer ve seri çıktısı olarak kaydeder.</p><form method="post" action="{{ url_for('dashboard.create_streak_channel') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Mevcut #seri kanalını seç / yoksa oluştur</button></form></section>
+<section><h2>Güvenlik notu</h2><p>Paneldeki kritik yönetim işlemleri şu an sunucu sahibiyle sınırlı. Modül izinlerini kaydetmek tek başına erişim izni vermemeli; izin kontrolü her işlemde ayrıca uygulanmalı. Bakım modu yalnızca web panelini etkiler, Discord botunu durdurmaz.</p></section>
+</body></html>
+"""
+
+
+@dashboard_bp.post("/community/streak-channel/create")
+@owner_required
+def create_streak_channel():
+    _require_csrf()
+    guild_id = str(settings.discord_guild_id or "").strip()
+    if not guild_id.isdigit():
+        flash("Önce Fadehost ortam değişkenlerine Mahzen sunucusunun DISCORD_GUILD_ID değerini ekle.")
+        return redirect(url_for("dashboard.community_settings"))
+    if not settings.discord_token:
+        flash("DISCORD_TOKEN ayarlanmamış; bot API üzerinden kanal oluşturulamıyor.")
+        return redirect(url_for("dashboard.community_settings"))
+    headers = {"Authorization": f"Bot {settings.discord_token}", "Content-Type": "application/json"}
+    base = f"https://discord.com/api/v10/guilds/{guild_id}/channels"
+    try:
+        response = requests.get(base, headers=headers, timeout=8)
+        response.raise_for_status()
+        channels = response.json()
+        if not isinstance(channels, list):
+            raise ValueError("Discord kanal listesi beklenmeyen biçimde döndü.")
+        channel = next((item for item in channels if item.get("type") == 0 and str(item.get("name", "")).casefold() == "seri"), None)
+        created = False
+        if channel is None:
+            response = requests.post(base, headers=headers, json={
+                "name": "seri",
+                "type": 0,
+                "topic": "Mahzen ortak serisi · günlük ilerleme ve özetler Kaplumbik tarafından yayımlanır."
+            }, timeout=8)
+            response.raise_for_status()
+            channel = response.json()
+            created = True
+        channel_id = str(channel.get("id", ""))
+        if not channel_id.isdigit():
+            raise ValueError("Discord kanal yanıtında geçerli bir kanal ID'si yok.")
+        actor = str(session["discord_id"])
+        set_setting("streak_channel_id", channel_id, actor)
+        from app.seri.service import ensure_tracking_started_date
+        ensure_tracking_started_date(actor)
+        db.session.add(AuditLog(
+            actor_discord_id=actor,
+            action="dashboard.streak_channel_create_or_select",
+            target_type="channel",
+            target_id=channel_id,
+            details={"guild_id": guild_id, "created": created, "channel_name": channel.get("name", "seri")},
+            success=True,
+        ))
+        db.session.commit()
+        flash(f"{'#seri kanalı oluşturuldu' if created else 'Mevcut #seri kanalı seçildi'} ve seri çıktısı olarak kaydedildi. Kanal ID: {channel_id}")
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else 0
+        logger.exception("Discord #seri channel setup failed.")
+        if status == 403:
+            flash("Discord kanal oluşturma izni reddedildi. Botun Mahzen sunucusunda Kanalları Yönet yetkisini kontrol et.")
+        else:
+            flash(f"Discord API isteği başarısız oldu (HTTP {status}). Botun sunucuya erişimini ve kanal izinlerini kontrol et.")
+    except (requests.RequestException, ValueError):
+        logger.exception("Discord #seri channel setup failed.")
+        db.session.rollback()
+        flash("Seri kanalı ayarlanamadı. Fadehost günlüklerini kontrol et; Discord bağlantısı veya yanıtı geçersiz.")
+    except Exception:
+        logger.exception("Unexpected error while saving #seri channel setting.")
+        db.session.rollback()
+        flash("Kanal oluşturulmuş olabilir ancak ayar kaydedilemedi. Aynı düğmeye tekrar basarsan mevcut #seri kanalı yeniden seçilir.")
+    return redirect(url_for("dashboard.community_settings"))
+
+
+@dashboard_bp.get("/community")
+@owner_required
+def community_settings():
+    from app.events.feature_service import get_setting
+    return render_template_string(COMMUNITY_SETTINGS_PAGE, csrf_token=session.get("csrf_token",""),
+        theme=get_setting("dashboard_theme","sage"),
+        cards=[x for x in get_setting("dashboard_home_cards","overview,events,economy,security,streak,ai").split(",") if x],
+        card_options=[("overview","Genel bakış"),("events","Etkinlikler"),("economy","Puanlar ve mağaza"),("security","Güvenlik"),("streak","Ortak seri"),("ai","AI kontrol merkezi")],
+        suggestion_channel_id=get_setting("suggestion_channel_id",""),
+        streak_channel_id=get_setting("streak_channel_id",""),
+        streak_source_channel_ids=get_setting("streak_source_channel_ids",""),
+        streak_reward_points=get_setting("streak_reward_points","5"),
+        maintenance_mode=get_setting("maintenance_mode","false").casefold()=="true")
+
+@dashboard_bp.post("/community")
+@owner_required
+def community_settings_save():
+    _require_csrf()
+    from app.events.feature_service import get_setting, set_setting
+    theme=request.form.get("theme","sage")
+    if theme not in {"sage","latte","dark"}:
+        flash("Tema seçimi geçersiz."); return redirect(url_for("dashboard.community_settings"))
+    allowed={"overview","events","economy","security","streak","ai"}
+    cards=[x for x in request.form.getlist("cards") if x in allowed]
+    channel=request.form.get("suggestion_channel_id","").strip()
+    if channel and not channel.isdigit():
+        flash("Öneri kanalı Discord kanal ID'si olmalı."); return redirect(url_for("dashboard.community_settings"))
+    output_channel=request.form.get("streak_channel_id","").strip()
+    source_channels=request.form.get("streak_source_channel_ids","").strip()
+    try: streak_reward_points=int(request.form.get("streak_reward_points","5"))
+    except ValueError: streak_reward_points=-1
+    if not 0<=streak_reward_points<=1000:
+        flash("Seri ödülü 0 ile 1000 puan arasında olmalı."); return redirect(url_for("dashboard.community_settings"))
+    if output_channel and not output_channel.isdigit():
+        flash("Seri çıktı kanalı ID'si sayısal olmalı."); return redirect(url_for("dashboard.community_settings"))
+    source_ids=[x.strip() for x in source_channels.split(",") if x.strip()]
+    if any(not x.isdigit() for x in source_ids):
+        flash("Seri kaynak kanalları yalnızca sayısal Discord ID'leri içermeli."); return redirect(url_for("dashboard.community_settings"))
+    actor=str(session["discord_id"])
+    set_setting("dashboard_theme",theme,actor)
+    set_setting("dashboard_home_cards",",".join(dict.fromkeys(cards)),actor)
+    set_setting("suggestion_channel_id",channel,actor)
+    set_setting("streak_channel_id",output_channel,actor)
+    set_setting("streak_source_channel_ids",",".join(dict.fromkeys(source_ids)),actor)
+    set_setting("streak_reward_points",str(streak_reward_points),actor)
+    from app.seri.service import ensure_tracking_started_date
+    ensure_tracking_started_date(actor)
+    set_setting("maintenance_mode","true" if request.form.get("maintenance_mode")=="true" else "false",actor)
+    db.session.add(AuditLog(actor_discord_id=actor,action="dashboard.customization",target_type="dashboard",target_id="community",details={"theme":theme,"cards":cards,"maintenance_mode":request.form.get("maintenance_mode")=="true","streak_channel_id":output_channel,"streak_source_channel_ids":source_ids,"streak_reward_points":streak_reward_points},success=True))
+    db.session.commit()
+    flash("Panel ayarları kaydedildi.")
+    return redirect(url_for("dashboard.community_settings"))
 
 
 @dashboard_bp.get("/advanced")
@@ -148,6 +314,7 @@ SETTING_KEYS = (
 def advanced_index():
     seed_achievements()
     values = {key: get_setting(key) for key in SETTING_KEYS}
+    values["openrouter_model"] = get_setting("openrouter_model", settings.openrouter_model or "openai/gpt-4o-mini")
     values["announcement_times"] = get_setting("announcement_times", "12:00,17:00,20:00")
     values["game_reminder_minutes"] = get_setting("game_reminder_minutes", "15,5")
     values["daily_announcement_text"] = get_setting("daily_announcement_text", "")
@@ -169,6 +336,29 @@ def advanced_index():
     return render_template_string(SETTINGS_PAGE, values=values, people=people, giveaways=giveaways, achievements=achievements, health=health, audit_logs=audit_logs, announcement_logs=announcement_logs, cancelled_events=cancelled_events, members=members, member_q=member_q, csrf_token=session.get("csrf_token", ""), local_time=_local_time)
 
 
+
+@dashboard_bp.post("/advanced/ai-test")
+@owner_required
+def ai_test():
+    _require_csrf()
+    prompt = request.form.get("prompt", "").strip()[:1000]
+    if not prompt:
+        flash("AI test mesajı boş olamaz.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        from app.events.assistant_features import _ai_request
+        answer = _ai_request(
+            prompt,
+            get_setting("ai_personality", ""),
+            get_setting("server_knowledge", ""),
+        )
+        return render_template_string("""<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kaplumbik AI test sonucu</title><style>body{font:15px/1.6 system-ui,sans-serif;background:#f5f3eb;color:#30382f;max-width:850px;margin:35px auto;padding:0 18px}main{background:#fffdf7;border:1px solid #d9dfd0;border-radius:18px;padding:24px;box-shadow:0 12px 32px #34412b0d}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f8f7f0;border:1px solid #d9dfd0;border-radius:12px;padding:16px;font:inherit}a{color:#536c49;font-weight:700}</style></head><body><main><h1>🧪 AI test sonucu</h1><p>Bu yanıt test ekranında üretildi; Discord'a gönderilmedi.</p><pre>{{ answer }}</pre><a href="{{ url_for('dashboard.advanced_index') }}">← Gelişmiş ayarlara dön</a></main></body></html>""", answer=answer)
+    except Exception:
+        logger.exception("Dashboard AI test failed.")
+        flash("AI testi başarısız. OPENROUTER_API_KEY, seçilen model ve servis günlüklerini kontrol et.")
+        return redirect(url_for("dashboard.advanced_index"))
+
+
 @dashboard_bp.post("/advanced/save")
 @owner_required
 def advanced_save():
@@ -176,6 +366,8 @@ def advanced_save():
     actor = str(session["discord_id"])
     try:
         values = {key: request.form.get(key, "").strip() for key in SETTING_KEYS}
+        if values["openrouter_model"] and (len(values["openrouter_model"]) > 150 or not re.fullmatch(r"[A-Za-z0-9._:/-]+", values["openrouter_model"])):
+            raise ValueError("OpenRouter model kimliği geçersiz. Örn. openai/gpt-4o-mini")
         for key in ("announcement_channel_id", "game_announcement_channel_id", "designer_discord_id"):
             value = values[key]
             if value and (not value.isdigit() or not 15 <= len(value) <= 25):

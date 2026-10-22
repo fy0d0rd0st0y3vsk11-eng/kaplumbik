@@ -1,0 +1,272 @@
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import select, func, update
+from sqlalchemy.exc import IntegrityError
+
+from app.database import db
+from app.database.advanced_models import BotSetting
+from app.database.models import AuditLog, UserProfile, EconomyTransaction
+from app.seri.models import StreakContribution, StreakDay
+
+GOAL = 3
+
+
+def _day_key(day: date) -> str:
+    return day.isoformat()
+
+
+
+def ensure_tracking_started_date(actor_discord_id: str = "kaplumbik") -> str:
+    """Start streak history only after both output and source channels are configured."""
+    if not get_channel_id() or not get_source_channel_ids():
+        return ""
+    start_row = db.session.get(BotSetting, "streak_tracking_started_date")
+    last_row = db.session.get(BotSetting, "streak_last_closed_date")
+    day_count = db.session.scalar(select(func.count(StreakDay.id))) or 0
+    if start_row is not None and start_row.value and (last_row is not None and last_row.value or day_count):
+        return start_row.value
+    today = datetime.now(ZoneInfo("Europe/Istanbul")).date().isoformat()
+    if start_row is None:
+        start_row = BotSetting(key="streak_tracking_started_date", value=today)
+        db.session.add(start_row)
+    else:
+        start_row.value = today
+    start_row.updated_by = str(actor_discord_id)
+    db.session.add(AuditLog(
+        actor_discord_id=str(actor_discord_id),
+        action="streak.tracking_started",
+        target_type="streak",
+        target_id=today,
+        details={"source_channels": sorted(get_source_channel_ids()), "output_channel": get_channel_id()},
+        success=True,
+    ))
+    db.session.commit()
+    return today
+
+
+def get_or_create_day(day: date) -> StreakDay:
+    key = _day_key(day)
+    row = db.session.execute(select(StreakDay).where(StreakDay.day == key)).scalar_one_or_none()
+    if row is not None:
+        return row
+    row = StreakDay(day=key, status="open")
+    db.session.add(row)
+    try:
+        db.session.flush()
+    except IntegrityError:
+        db.session.rollback()
+        row = db.session.execute(select(StreakDay).where(StreakDay.day == key)).scalar_one()
+    return row
+
+
+def contribution_count(day_row: StreakDay) -> int:
+    return int(db.session.scalar(
+        select(func.count(StreakContribution.id)).where(StreakContribution.day_id == day_row.id)
+    ) or 0)
+
+
+def contributor_ids(day_row: StreakDay) -> list[str]:
+    return list(db.session.execute(
+        select(StreakContribution.discord_id).where(StreakContribution.day_id == day_row.id)
+        .order_by(StreakContribution.first_message_at.asc(), StreakContribution.id.asc())
+    ).scalars())
+
+
+def record_contribution(day: date, discord_id: str, channel_id: str, message_id: str) -> tuple[StreakDay, bool]:
+    row = get_or_create_day(day)
+    existing = db.session.execute(select(StreakContribution.id).where(
+        StreakContribution.day_id == row.id,
+        StreakContribution.discord_id == str(discord_id),
+    )).scalar_one_or_none()
+    if existing is not None:
+        return row, False
+    db.session.add(StreakContribution(
+        day_id=row.id, discord_id=str(discord_id), source_channel_id=str(channel_id),
+        source_message_id=str(message_id),
+    ))
+    try:
+        db.session.commit()
+        return row, True
+    except IntegrityError:
+        db.session.rollback()
+        row = db.session.execute(select(StreakDay).where(StreakDay.day == _day_key(day))).scalar_one()
+        return row, False
+
+
+def latest_streak_length() -> int:
+    """Return the latest completed streak length; pending days pause rather than reset it."""
+    rows = list(db.session.execute(select(StreakDay).where(
+        StreakDay.status.in_(["completed", "forgiven"])
+    ).order_by(StreakDay.day.asc())).scalars())
+    streak = 0
+    previous_date = None
+    for row in rows:
+        row_date = date.fromisoformat(row.day)
+        if previous_date is None or (row_date - previous_date).days == 1:
+            streak += 1
+        else:
+            streak = 1
+        previous_date = row_date
+    # A pending day pauses the streak; it is not counted as a failure/reset.
+    return streak
+
+
+
+def _award_day_contributors(day_row: StreakDay, actor_discord_id: str = "kaplumbik") -> int:
+    """Award configured shared-streak points once per contributor in the same DB transaction."""
+    if contribution_count(day_row) < GOAL:
+        return 0
+    setting = db.session.get(BotSetting, "streak_reward_points")
+    try:
+        reward = max(0, min(1000, int(setting.value if setting else "5")))
+    except (TypeError, ValueError):
+        reward = 5
+    if reward == 0:
+        return 0
+    awarded = 0
+    for discord_id in contributor_ids(day_row):
+        key = f"streak-reward:{day_row.day}:{discord_id}"
+        existing = db.session.execute(select(EconomyTransaction.id).where(EconomyTransaction.idempotency_key == key)).scalar_one_or_none()
+        if existing is not None:
+            continue
+        profile = db.session.execute(select(UserProfile).where(UserProfile.discord_id == discord_id)).scalar_one_or_none()
+        if profile is None:
+            profile = UserProfile(discord_id=discord_id, balance=0)
+            db.session.add(profile)
+            db.session.flush()
+        db.session.execute(update(UserProfile).where(UserProfile.discord_id == discord_id).values(balance=UserProfile.balance + reward))
+        profile = db.session.execute(select(UserProfile).where(UserProfile.discord_id == discord_id)).scalar_one()
+        db.session.add(EconomyTransaction(
+            user_id=profile.id, amount=reward, balance_after=profile.balance,
+            transaction_type="shared_streak_reward", description=f"Mahzen ortak seri ödülü: {day_row.day}",
+            actor_discord_id=str(actor_discord_id), reference_type="streak_day", reference_id=day_row.day,
+            idempotency_key=key,
+        ))
+        awarded += 1
+    return awarded
+
+def close_day(day: date, actor_discord_id: str | None = None) -> tuple[StreakDay, bool]:
+    row = get_or_create_day(day)
+    if row.status != "open":
+        return row, False
+    pending_before = db.session.execute(select(StreakDay.id).where(
+        StreakDay.day < row.day, StreakDay.status == "pending"
+    ).limit(1)).scalar_one_or_none() is not None
+    count = contribution_count(row)
+    previous_streak = latest_streak_length()
+    if count >= GOAL and not pending_before:
+        row.status = "completed"
+        row.streak_after = previous_streak + 1
+    else:
+        row.status = "pending"
+        row.streak_after = latest_streak_length()
+    row.closed_at = datetime.now(timezone.utc)
+    rewarded_members = _award_day_contributors(row, actor_discord_id or "kaplumbik") if row.status == "completed" else 0
+    db.session.add(AuditLog(
+        actor_discord_id=actor_discord_id, action="streak.day_closed", target_type="streak_day",
+        target_id=row.day, details={"status": row.status, "contributors": count, "goal": GOAL, "rewarded_members": rewarded_members}, success=True,
+    ))
+    db.session.commit()
+    return row, True
+
+
+def make_up_pending_days(count: int, actor_discord_id: str) -> list[StreakDay]:
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1 or count > 365:
+        raise ValueError("Telafi sayısı 1–365 arasında bir tam sayı olmalı.")
+    rows = list(db.session.execute(select(StreakDay).where(StreakDay.status == "pending")
+        .order_by(StreakDay.day.desc()).limit(count)).scalars())
+    if len(rows) != count:
+        raise ValueError(f"Yalnızca {len(rows)} telafi bekleyen gün var; {count} istedin.")
+    for row in rows:
+        row.status = "forgiven"
+        row.streak_after = 0  # Recomputed below from chronological history.
+        _award_day_contributors(row, actor_discord_id)
+    ordered = list(db.session.execute(select(StreakDay).where(
+        StreakDay.status.in_(["completed", "forgiven"])
+    ).order_by(StreakDay.day.asc())).scalars())
+    streak = 0
+    previous_date = None
+    for row in ordered:
+        row_date = date.fromisoformat(row.day)
+        streak = streak + 1 if previous_date is not None and (row_date - previous_date).days == 1 else 1
+        row.streak_after = streak
+        previous_date = row_date
+    db.session.add(AuditLog(
+        actor_discord_id=str(actor_discord_id), action="streak.make_up", target_type="streak_day",
+        target_id=",".join(sorted(row.day for row in rows)),
+        details={"count": len(rows), "days": sorted(row.day for row in rows)}, success=True,
+    ))
+    db.session.commit()
+    return sorted(rows, key=lambda item: item.day)
+
+
+def correct_contribution(day: date, discord_id: str, add: bool, actor_discord_id: str, reason: str) -> int:
+    reason = (reason or "").strip()[:300]
+    if not reason:
+        raise ValueError("Düzeltme gerekçesi zorunlu.")
+    row = get_or_create_day(day)
+    contribution = db.session.execute(select(StreakContribution).where(
+        StreakContribution.day_id == row.id, StreakContribution.discord_id == str(discord_id)
+    )).scalar_one_or_none()
+    if add and contribution is None:
+        db.session.add(StreakContribution(day_id=row.id, discord_id=str(discord_id), correction_note=reason))
+    elif not add and contribution is not None:
+        db.session.delete(contribution)
+    elif add == (contribution is not None):
+        raise ValueError("Bu üyenin o gündeki katkısı zaten istediğin durumda.")
+    db.session.add(AuditLog(
+        actor_discord_id=str(actor_discord_id), action="streak.contribution_correct", target_type="streak_contribution",
+        target_id=f"{row.day}:{discord_id}", details={"add": add, "reason": reason}, success=True,
+    ))
+    db.session.commit()
+    return contribution_count(row)
+
+
+def get_channel_id() -> str:
+    row = db.session.get(BotSetting, "streak_channel_id")
+    return (row.value or "").strip() if row else ""
+
+
+def set_channel_id(channel_id: str, actor_discord_id: str) -> None:
+    value = str(channel_id)
+    row = db.session.get(BotSetting, "streak_channel_id")
+    if row is None:
+        row = BotSetting(key="streak_channel_id", value=value)
+        db.session.add(row)
+    else:
+        row.value = value
+    row.updated_by = str(actor_discord_id)
+    db.session.add(AuditLog(actor_discord_id=str(actor_discord_id), action="streak.channel_set",
+        target_type="channel", target_id=value, details={}, success=True))
+    db.session.commit()
+    ensure_tracking_started_date(actor_discord_id)
+
+
+def get_source_channel_ids() -> set[str]:
+    row = db.session.get(BotSetting, "streak_source_channel_ids")
+    if row is None or not row.value:
+        return set()
+    return {part.strip() for part in row.value.split(",") if part.strip().isdigit()}
+
+
+def set_source_channel(channel_id: str, add: bool, actor_discord_id: str) -> set[str]:
+    channels = get_source_channel_ids()
+    value = str(channel_id)
+    if add:
+        channels.add(value)
+    else:
+        channels.discard(value)
+    row = db.session.get(BotSetting, "streak_source_channel_ids")
+    serialized = ",".join(sorted(channels, key=int))
+    if row is None:
+        row = BotSetting(key="streak_source_channel_ids", value=serialized)
+        db.session.add(row)
+    else:
+        row.value = serialized
+    row.updated_by = str(actor_discord_id)
+    db.session.add(AuditLog(actor_discord_id=str(actor_discord_id), action="streak.source_channels_set",
+        target_type="channel", target_id=value, details={"add": add, "channels": sorted(channels, key=int)}, success=True))
+    db.session.commit()
+    ensure_tracking_started_date(actor_discord_id)
+    return channels

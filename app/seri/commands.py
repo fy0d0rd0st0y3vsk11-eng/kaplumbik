@@ -219,13 +219,13 @@ class SharedStreak(commands.Cog):
         if not _is_owner_or_admin(interaction):
             await interaction.response.send_message("Bu işlem sunucu sahibi veya Administrator yetkisi gerektirir.", ephemeral=True)
             return
-        app = create_app()
-        with app.app_context():
-            set_channel_id(str(kanal.id), str(interaction.user.id))
         permissions = kanal.permissions_for(interaction.guild.me) if interaction.guild and interaction.guild.me else None
         if permissions is None or not permissions.view_channel or not permissions.send_messages or not permissions.read_message_history:
             await interaction.response.send_message("Botun bu kanalda Görüntüle, Mesaj Gönder ve Mesaj Geçmişini Oku izinleri olmalı.", ephemeral=True)
             return
+        app = create_app()
+        with app.app_context():
+            set_channel_id(str(kanal.id), str(interaction.user.id))
         await interaction.response.send_message(f"Seri ilerlemesi ve özet kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
 
     @app_commands.command(name="serikaynakkanal", description="Ortak seri sayacına katkı sağlayan sohbet kanalını ekle veya çıkar.")
@@ -233,6 +233,10 @@ class SharedStreak(commands.Cog):
     async def streak_source_channel(self, interaction: discord.Interaction, kanal: discord.TextChannel, ekle: bool):
         if not _is_owner_or_admin(interaction):
             await interaction.response.send_message("Bu işlem sunucu sahibi veya Administrator yetkisi gerektirir.", ephemeral=True)
+            return
+        permissions = kanal.permissions_for(interaction.guild.me) if interaction.guild and interaction.guild.me else None
+        if ekle and (permissions is None or not permissions.view_channel or not permissions.read_message_history):
+            await interaction.response.send_message("Botun bu kaynak kanalını görüntüleme ve mesaj geçmişini okuma izinleri olmalı.", ephemeral=True)
             return
         app = create_app()
         with app.app_context():

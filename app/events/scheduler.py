@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import discord
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message, send_green_reply
+
 from discord.ext import commands, tasks
 from sqlalchemy import select
 
@@ -123,7 +125,7 @@ class EventScheduler(commands.Cog):
             return
         try:
             user = self.bot.get_user(int(owner_id)) or await self.bot.fetch_user(int(owner_id))
-            await user.send(f"⚠️ **Kaplumbik duyuru hatası**\n{details[:1200]}")
+            await send_green_message(user, f"⚠️ **Kaplumbik duyuru hatası**\n{details[:1200]}")
         except Exception:
             logger.exception("Could not send private admin alert")
 
@@ -189,7 +191,7 @@ class EventScheduler(commands.Cog):
                 prefix = "@everyone\n" if ping else ""
                 message = prefix + _event_announcement_message(event)
                 try:
-                    await channel.send(message, view=EventRSVPView(event.id), allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
+                    await send_green_message(channel, message, view=EventRSVPView(event.id), allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
                     app = create_app()
                     with app.app_context():
                         _log_delivery(event.id, channel.id, kind, message, True)
@@ -230,7 +232,7 @@ class EventScheduler(commands.Cog):
         message = ("@everyone\n" if ping else "") + _event_announcement_message(event)
         kind = f"manual_resend:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
         try:
-            await channel.send(message, view=EventRSVPView(event.id), allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
+            await send_green_message(channel, message, view=EventRSVPView(event.id), allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
             app = create_app()
             with app.app_context():
                 _log_delivery(event.id, channel.id, kind, message, True)
@@ -262,7 +264,7 @@ class EventScheduler(commands.Cog):
         ping = (await asyncio.to_thread(_read_setting, "announcement_everyone_ping", "true")).lower() == "true"
         text = ("@everyone\n" if ping else "") + custom_text
         try:
-            await channel.send(text, allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
+            await send_green_message(channel, text, allowed_mentions=discord.AllowedMentions(everyone=ping, users=False, roles=False))
             app = create_app()
             with app.app_context():
                 _log_delivery(None, channel.id, kind, text, True)

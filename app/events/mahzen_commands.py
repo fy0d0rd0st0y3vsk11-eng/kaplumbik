@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app import create_app
 from app.database import db
-from app.database.advanced_models import Giveaway, GiveawayParticipant, PersonProfile
+from app.database.advanced_models import Giveaway, GiveawayParticipant, PersonProfile, MemberIntro
 from app.database.models import AuditLog, UserProfile
 from app.database.event_models import Event, EventParticipation
 from app.events.feature_service import get_setting
@@ -27,21 +27,86 @@ def _aware(value):
     return value
 
 
-def _get_people():
+def _get_people(guild_id):
     app = create_app()
     with app.app_context():
-        return db.session.execute(
-            select(PersonProfile).order_by(PersonProfile.name.asc()).limit(1000)
-        ).scalars().all()
+        people = [{"id": f"p:{p.id}", "name": p.name, "info": p.info}
+                  for p in db.session.execute(select(PersonProfile).order_by(PersonProfile.name.asc()).limit(1000)).scalars().all()]
+        if guild_id is not None:
+            members = db.session.execute(select(MemberIntro).where(
+                MemberIntro.guild_id == str(guild_id), MemberIntro.status == "approved"
+            ).order_by(MemberIntro.name.asc()).limit(1000)).scalars().all()
+            people.extend({"id": f"m:{p.id}", "name": p.name, "info": p.info} for p in members)
+        return sorted(people, key=lambda p: p["name"].casefold())
 
 
-def _person_info(person_id):
+def _person_info(person_key, guild_id):
+    try:
+        kind, raw_id = str(person_key).split(":", 1)
+        person_id = int(raw_id)
+    except (ValueError, TypeError):
+        return None
     app = create_app()
     with app.app_context():
-        person = db.session.get(PersonProfile, person_id)
-        if person is None:
+        if kind == "p":
+            person = db.session.get(PersonProfile, person_id)
+        elif kind == "m":
+            person = db.session.execute(select(MemberIntro).where(
+                MemberIntro.id == person_id, MemberIntro.guild_id == str(guild_id),
+                MemberIntro.status == "approved"
+            )).scalar_one_or_none()
+        else:
             return None
-        return person.name, person.info
+        return (person.name, person.info) if person else None
+
+
+class MemberIntroModal(discord.ui.Modal, title="Mahzen · Kendini tanıt"):
+    intro_name = discord.ui.TextInput(
+        label="Tanıtımda kullanacağın isim", placeholder="İsmin veya takma adın",
+        min_length=1, max_length=100,
+    )
+    intro_info = discord.ui.TextInput(
+        label="Kendin hakkında", placeholder="Hobilerin, sevdiğin oyunlar, ilgi alanların…",
+        style=discord.TextStyle.paragraph, min_length=5, max_length=1000,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if interaction.guild_id is None:
+            await interaction.response.send_message("Bu komut yalnızca Mahzen sunucusunda kullanılabilir.", ephemeral=True)
+            return
+        name, info = str(self.intro_name.value).strip(), str(self.intro_info.value).strip()
+        if not name or not info:
+            await interaction.response.send_message("İsim ve hakkında alanlarını doldurmalısın.", ephemeral=True)
+            return
+        app = create_app()
+        try:
+            with app.app_context():
+                row = db.session.execute(select(MemberIntro).where(
+                    MemberIntro.guild_id == str(interaction.guild_id),
+                    MemberIntro.discord_id == str(interaction.user.id)
+                )).scalar_one_or_none()
+                action = "member_intro.submit"
+                if row is None:
+                    row = MemberIntro(guild_id=str(interaction.guild_id), discord_id=str(interaction.user.id),
+                                      name=name, info=info, status="pending")
+                    db.session.add(row)
+                else:
+                    row.name, row.info, row.status, row.reviewed_by = name, info, "pending", None
+                    action = "member_intro.resubmit"
+                db.session.flush()
+                db.session.add(AuditLog(actor_discord_id=str(interaction.user.id), action=action,
+                    target_type="member_intro", target_id=str(row.id),
+                    details={"name": name, "status": "pending"}, success=True))
+                db.session.commit()
+            await interaction.response.send_message(
+                "Tanıtımın kaydedildi ve dashboard'da onay bekliyor. Onaylandıktan sonra /kisitanit listesinde görünecek. 🐢",
+                ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        except Exception:
+            with app.app_context():
+                db.session.rollback()
+            logger.exception("Member self-intro submission failed")
+            if not interaction.response.is_done():
+                await interaction.response.send_message("Tanıtım kaydedilemedi. Birazdan tekrar dene.", ephemeral=True)
 
 
 def _giveaway_snapshot(giveaway_id):
@@ -70,11 +135,8 @@ def _giveaway_snapshot(giveaway_id):
 class PersonSelect(discord.ui.Select):
     def __init__(self, people):
         options = [
-            discord.SelectOption(
-                label=person.name[:100],
-                value=str(person.id),
-                description=(person.info or "Tanıtımı görüntüle").replace("\n", " ")[:100],
-            )
+            discord.SelectOption(label=person["name"][:100], value=person["id"],
+                description=(person["info"] or "Tanıtımı görüntüle").replace("\n", " ")[:100])
             for person in people
         ]
         super().__init__(
@@ -87,7 +149,7 @@ class PersonSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            result = _person_info(int(self.values[0]))
+            result = _person_info(self.values[0], interaction.guild_id)
             if result is None:
                 await interaction.response.send_message(
                     "Bu kişi kaydı artık bulunmuyor. Paneldeki liste yenilenmeli.",
@@ -158,9 +220,16 @@ class MahzenCommands(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="kisitanit", description="Listeden bir Mahzen üyesi seçip tanıtımını oku.")
+    @app_commands.command(name="kendinitanit", description="İsim ve hakkında bilgilerini girerek tanıtımını onaya gönder.")
+    async def self_intro(self, interaction: discord.Interaction):
+        if interaction.guild_id is None:
+            await interaction.response.send_message("Bu komut yalnızca Mahzen sunucusunda kullanılabilir.", ephemeral=True)
+            return
+        await interaction.response.send_modal(MemberIntroModal())
+
+    @app_commands.command(name="kisitanit", description="Onaylanmış üyeler arasından birini seçip tanıtımını oku.")
     async def person_directory(self, interaction: discord.Interaction):
-        people = _get_people()
+        people = _get_people(interaction.guild_id)
         if not people:
             await interaction.response.send_message(
                 "Henüz kişi tanıtımı eklenmemiş. Yönetim panelindeki Kişi tanıtımları bölümünden eklenebilir.",

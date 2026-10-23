@@ -75,7 +75,9 @@ Günlük hedef Europe/Istanbul saatine göre 00.00'da yenilenir; farklı gerçek
 - `/onerigonder`, `/onerioyla`, `/oneridurum`: suggestion intake, cooldown, voting and admin status flow.
 - `/gorevler`, `/goreval`: weekly personal/shared quest progress and idempotent reward claim.
 - `/dukkan`, `/dukkanurunekle`, `/dukkanal`: configurable shop listing, admin product creation, and purchases for roles, cosmetic titles, badges, and collectibles.
-- `/envanter`: list all owned shop items with their type and expiry.\n- `/unvan`: view, equip, or remove an owned cosmetic title; the active title is shown on `/profil`.\n- `/rozetler`: view purchased badge products. `/koleksiyon`: view owned collectible products. Ownership is stored in the database and survives bot restarts.
+- `/envanter`: list all owned shop items with their type and expiry.
+- `/unvan`: view, equip, or remove an owned cosmetic title; the active title is shown on `/profil`.
+- `/rozetler`: view purchased badge products. `/koleksiyon`: view owned collectible products. Ownership is stored in the database and survives bot restarts.
 - `/modulizin`: owner-only role/module permission configuration record.
 
 The module-permission record is not a substitute for enforcing permissions on every dashboard route and command. Those enforcement paths and remaining planned dashboard features must be reviewed before production rollout.

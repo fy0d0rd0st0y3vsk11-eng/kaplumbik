@@ -135,3 +135,13 @@ class AIMemoryPreference(db.Model):
     enabled=db.Column(db.Boolean,nullable=False,default=False)
     updated_at=db.Column(db.DateTime(timezone=True),nullable=False,default=utc_now,onupdate=utc_now)
     __table_args__=(db.UniqueConstraint("guild_id","discord_id",name="uq_ai_memory_preference"),)
+
+
+class MemberShopPreference(db.Model):
+    """Per-member cosmetic choices for the reward shop."""
+    __tablename__ = "member_shop_preferences"
+
+    id = db.Column(db.Integer, primary_key=True)
+    discord_id = db.Column(db.String(25), unique=True, nullable=False, index=True)
+    active_title_key = db.Column(db.String(80), nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)

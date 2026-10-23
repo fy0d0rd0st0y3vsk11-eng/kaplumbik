@@ -282,7 +282,6 @@ class MahzenCommunity(commands.Cog):
                         {"role":"system","content":'Türkçe Discord topluluğu için tarafsız, kısa anket taslağı üret. Yalnızca geçerli JSON döndür: {"question":"...","options":["...","..."]}. 2-5 kısa seçenek. Siyasi/kişisel hassas veri sorma.'},
                         {"role":"user","content":f"Konu: {konu.strip()}"},
                     ],
-                    "response_format":{"type":"json_object"},
                 },
                 timeout=25,
             )

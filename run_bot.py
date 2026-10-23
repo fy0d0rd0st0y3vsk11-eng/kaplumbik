@@ -77,6 +77,9 @@ class KaplumbikBot(commands.Bot):
         await self.load_extension("app.seri.commands")
         logger.info("Mahzen ortak seri sistemi yüklendi.")
 
+        await self.load_extension("app.seri.midnight_fire")
+        logger.info("Gece yarısı seri GIF sistemi yüklendi.")
+
         await self.load_extension("app.events.community")
         logger.info("Mahzen topluluk, oyun profili, anket, öneri ve görev sistemleri yüklendi.")
 

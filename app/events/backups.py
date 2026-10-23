@@ -8,6 +8,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import discord
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message, send_green_reply
+
 from discord import app_commands
 from discord.ext import commands, tasks
 from sqlalchemy import select
@@ -134,7 +136,7 @@ class BackupCog(commands.Cog):
         if not settings.owner_discord_id or not settings.owner_discord_id.isdigit(): return
         try:
             user=self.bot.get_user(int(settings.owner_discord_id)) or await self.bot.fetch_user(int(settings.owner_discord_id))
-            await user.send(message[:1800])
+            await send_green_message(user, message[:1800])
         except discord.HTTPException: log.exception("Backup alert DM failed")
 
     @tasks.loop(minutes=30)
@@ -171,10 +173,10 @@ class BackupCog(commands.Cog):
         await interaction.response.defer(ephemeral=True,thinking=True)
         try:
             path,remote=await __import__("asyncio").to_thread(create_backup)
-            await interaction.followup.send("Yedek oluşturuldu. "+("Uzak depoya da yüklendi." if remote else "Yalnızca yerel diske yazıldı; Render'da kalıcı değildir, S3 uyumlu depolama yapılandırılmalı."),ephemeral=True)
+            await send_green_followup(interaction, "Yedek oluşturuldu. "+("Uzak depoya da yüklendi." if remote else "Yalnızca yerel diske yazıldı; Render'da kalıcı değildir, S3 uyumlu depolama yapılandırılmalı."),ephemeral=True)
         except Exception:
             log.exception("Manual backup failed")
-            await interaction.followup.send("Yedekleme başarısız oldu. Hata kayıtlarını kontrol et.",ephemeral=True)
+            await send_green_followup(interaction, "Yedekleme başarısız oldu. Hata kayıtlarını kontrol et.",ephemeral=True)
 
     @app_commands.command(name="yedekdurum",description="Son yedekleme durumunu göster (yalnızca sahip).")
     async def backup_status(self,interaction:discord.Interaction):

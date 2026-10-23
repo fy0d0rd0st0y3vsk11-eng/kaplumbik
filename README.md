@@ -17,7 +17,10 @@ Bot açılırken Discord komutlarını otomatik senkronize eder:
 - `/etkinlikler` — yaklaşan etkinlikleri listeler
 - `/etkinlik` — etkinlik ayrıntılarını ve katılım butonlarını gösterir
 - `/kimtasarladi` — Kaplumbik tasarımcısını gösterir
-- `/tanit` — seçilen üyeye Mahzen tanıtımını gösterir
+- `/tanit` — yönetim panelinde hazırlanmış kişi tanıtımını gösterir
+- `/kendinitanit` — üye iki ayrı alana isim ve hakkında bilgisini girer; kayıt yönetici onayı bekler
+- `/kisitanit` — paneldeki kişi profillerini ve onaylanmış üye tanıtımlarını listeler
+- `/mahzenkomutlar` — Mahzen’e özel komutların rehberini gösterir
 - `/profil` — üye profili, puan ve rozetleri gösterir
 - `/etkinlikgecmisi` — etkinlik katılım geçmişini gösterir
 

@@ -75,6 +75,37 @@ def _extract_args(args: tuple, kwargs: dict):
     return args, kwargs
 
 
+async def edit_green_response(interaction: discord.Interaction, *args: Any, **kwargs: Any) -> Any:
+    """Style edited bot messages while preserving component/view updates."""
+    content = kwargs.pop("content", None)
+    embed = kwargs.pop("embed", None)
+    embeds = kwargs.pop("embeds", None)
+    if args:
+        first, *remaining = args
+        if isinstance(first, str):
+            content = first if content is None else content
+        elif isinstance(first, discord.Embed):
+            embed = first if embed is None else embed
+        else:
+            remaining.insert(0, first)
+        args = tuple(remaining)
+
+    if embed is not None or embeds:
+        content, embed, embeds = _prepare(content, embed, embeds)
+    elif isinstance(content, str):
+        content, embed, embeds = _prepare(content, None, None)
+    elif interaction.message and interaction.message.embeds:
+        embeds = [make_green_embed(embed=item) for item in interaction.message.embeds]
+
+    if embeds is not None:
+        kwargs["embeds"] = embeds
+    elif embed is not None:
+        kwargs["embed"] = embed
+    if content is not None:
+        kwargs["content"] = content
+    return await interaction.response.edit_message(*args, **kwargs)
+
+
 async def send_green_response(interaction: discord.Interaction, *args: Any, **kwargs: Any) -> Any:
     """Send an interaction response using the green theme without losing options."""
     args, kwargs = _extract_args(args, kwargs)

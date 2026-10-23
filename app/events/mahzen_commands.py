@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timezone
 
 import discord
-from app.events.green_embeds import send_green_response, send_green_followup, send_green_message
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message, send_green_reply, edit_green_response
 
 from discord import app_commands
 from discord.ext import commands
@@ -196,7 +196,7 @@ class PersonPageButton(discord.ui.Button):
             return
         view.page = max(0, min(view.page + self.direction, view.page_count - 1))
         view.refresh_items()
-        await interaction.response.edit_message(view=view)
+        await edit_green_response(interaction, view=view)
 
 
 class PersonSelectView(discord.ui.View):

@@ -5,7 +5,7 @@ import unicodedata
 from datetime import datetime, timezone, timedelta
 
 import discord
-from app.events.green_embeds import send_green_response, send_green_followup, send_green_message
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message, send_green_reply
 
 import requests
 from sqlalchemy import select
@@ -203,7 +203,7 @@ async def _notify_owner(bot: commands.Bot, details: str):
         return
     try:
         user = bot.get_user(int(owner_id)) or await bot.fetch_user(int(owner_id))
-        await user.send(f"⚠️ **Kaplumbik hata bildirimi**\n{details[:1500]}")
+        await send_green_message(user, f"⚠️ **Kaplumbik hata bildirimi**\n{details[:1500]}")
     except Exception:
         logger.exception("Could not send private admin alert")
 
@@ -346,27 +346,27 @@ class AssistantFeatures(commands.Cog):
         if any(term in lowered for term in ("realms link", "realms bağlantı", "realms linki", "minecraft link")):
             link = await asyncio.to_thread(_setting, "minecraft_realms_link")
             if link:
-                await message.reply(f"🌍 Minecraft Realms bağlantısı: {link}", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await send_green_reply(message, f"🌍 Minecraft Realms bağlantısı: {link}", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             else:
-                await message.reply("Minecraft Realms bağlantısı henüz yönetim paneline eklenmemiş.", mention_author=False)
+                await send_green_reply(message, "Minecraft Realms bağlantısı henüz yönetim paneline eklenmemiş.", mention_author=False)
             return
         if any(term in lowered for term in ("gartic link", "gartic phone link", "gartic bağlantı")):
             link = await asyncio.to_thread(_setting, "gartic_phone_link")
-            await message.reply(f"🎨 Gartic Phone bağlantısı: {link}" if link else "Gartic Phone bağlantısı henüz ayarlanmamış.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await send_green_reply(message, f"🎨 Gartic Phone bağlantısı: {link}" if link else "Gartic Phone bağlantısı henüz ayarlanmamış.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return
         if any(term in lowered for term in ("among us kod", "among us code", "oda kodu", "code?")):
             code = await asyncio.to_thread(_setting, "among_us_room_code")
-            await message.reply(f"🚀 Among Us oda kodu: **{code}**" if code else "Among Us oda kodu henüz ayarlanmamış.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+            await send_green_reply(message, f"🚀 Among Us oda kodu: **{code}**" if code else "Among Us oda kodu henüz ayarlanmamış.", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             return
 
         if lowered.strip() in {"link", "link?", "link pls", "linki at", "link at", "bağlantı", "bağlantı?", "linki"}:
             result = await asyncio.to_thread(_next_game_link)
             if result and result[1]:
-                await message.reply(f"🔗 Yaklaşan {result[0]} etkinliği: {result[1]}", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await send_green_reply(message, f"🔗 Yaklaşan {result[0]} etkinliği: {result[1]}", mention_author=False, allowed_mentions=discord.AllowedMentions.none())
             elif result:
-                await message.reply(f"Yaklaşan {result[0]} etkinliği için bağlantı/kod henüz ayarlanmamış.", mention_author=False)
+                await send_green_reply(message, f"Yaklaşan {result[0]} etkinliği için bağlantı/kod henüz ayarlanmamış.", mention_author=False)
             else:
-                await message.reply("Şu anda yaklaşan etkinlik yok.", mention_author=False)
+                await send_green_reply(message, "Şu anda yaklaşan etkinlik yok.", mention_author=False)
             return
 
         # A direct reply to Kaplumbik should work like a mention.
@@ -389,7 +389,7 @@ class AssistantFeatures(commands.Cog):
             if not prompt_text:
                 prompt_text = "Kullanıcı sana seslendi ama soru yazmadı. Doğal ve kısa şekilde neye ihtiyacı olduğunu sor."
             if any(term in lowered for term in ("realms'e nasıl", "realms'e nasil", "realms nasıl katıl", "realms nasil katil", "minecraft realms", "how do i join realms", "how do i join a realm", "how to join realms", "join my realm")):
-                await message.reply(
+                await send_green_reply(message, 
                     "Minecraft Realms'e katılmak için: Minecraft'ı aç, doğru Microsoft hesabında olduğundan emin ol, **Oyna > Arkadaşlar** bölümüne gir ve davet edilen Realm'i seç. Sahip sana davet bağlantısı/kodu göndermeli; sürümün (Bedrock/Java) ve platformun Realm ile uyumlu olmalı. Bağlantıyı panelden ekleyebiliriz.",
                     mention_author=False,
                 )
@@ -437,13 +437,13 @@ class AssistantFeatures(commands.Cog):
                 async with message.channel.typing():
                     answer = await asyncio.to_thread(_ai_request, contextual_prompt, personality, knowledge)
                 await asyncio.to_thread(_save_conversation_memory, guild_id, channel_id, member_id, "Kaplumbik", "assistant", answer)
-                await message.reply(answer, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+                await send_green_reply(message, answer, mention_author=False, allowed_mentions=discord.AllowedMentions.none())
                 await asyncio.to_thread(_health, "ai", "ok", "AI yanıtı üretildi.")
             except Exception as exc:
                 logger.exception("AI response failed")
                 await asyncio.to_thread(_health, "ai", "error", str(exc))
                 await _notify_owner(self.bot, f"AI yanıtı başarısız: {str(exc)}")
-                await message.reply("Şu an yanıt veremedim; hata yönetim paneline kaydedildi.", mention_author=False)
+                await send_green_reply(message, "Şu an yanıt veremedim; hata yönetim paneline kaydedildi.", mention_author=False)
 
     @discord.app_commands.command(name="kimtasarladi", description="Kaplumbik'i kimin tasarladığını gösterir.")
     async def designer(self, interaction: discord.Interaction):

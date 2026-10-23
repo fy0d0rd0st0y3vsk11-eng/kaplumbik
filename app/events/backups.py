@@ -169,7 +169,7 @@ class BackupCog(commands.Cog):
     @app_commands.command(name="yedekle",description="Veri tabanının anlık yedeğini oluştur (yalnızca sahip).")
     async def manual_backup(self,interaction:discord.Interaction):
         if not settings.owner_discord_id or str(interaction.user.id)!=str(settings.owner_discord_id):
-            await interaction.response.send_message("Yedekleme yalnızca sunucu sahibine açık.",ephemeral=True); return
+            await send_green_response(interaction, "Yedekleme yalnızca sunucu sahibine açık.",ephemeral=True); return
         await interaction.response.defer(ephemeral=True,thinking=True)
         try:
             path,remote=await __import__("asyncio").to_thread(create_backup)
@@ -181,13 +181,13 @@ class BackupCog(commands.Cog):
     @app_commands.command(name="yedekdurum",description="Son yedekleme durumunu göster (yalnızca sahip).")
     async def backup_status(self,interaction:discord.Interaction):
         if not settings.owner_discord_id or str(interaction.user.id)!=str(settings.owner_discord_id):
-            await interaction.response.send_message("Bu bilgi yalnızca sunucu sahibine açık.",ephemeral=True); return
+            await send_green_response(interaction, "Bu bilgi yalnızca sunucu sahibine açık.",ephemeral=True); return
         app=create_app()
         with app.app_context():
             row=db.session.get(BotSetting,"backup_last_success")
             health=db.session.execute(select(BotHealthRecord).where(BotHealthRecord.component=="database_backup").order_by(BotHealthRecord.checked_at.desc()).limit(1)).scalar_one_or_none()
             last=row.value if row else "Henüz yedek yok"
             detail=health.details if health else "Durum kaydı yok"
-        await interaction.response.send_message(f"Son başarılı yedek: {last}\nDurum: {detail}\nYerel yedek klasörü: {_backup_dir()}\nS3 bucket: {'yapılandırıldı' if os.getenv('BACKUP_S3_BUCKET') else 'yapılandırılmadı'}",ephemeral=True)
+        await send_green_response(interaction, f"Son başarılı yedek: {last}\nDurum: {detail}\nYerel yedek klasörü: {_backup_dir()}\nS3 bucket: {'yapılandırıldı' if os.getenv('BACKUP_S3_BUCKET') else 'yapılandırılmadı'}",ephemeral=True)
 
 async def setup(bot): await bot.add_cog(BackupCog(bot))

@@ -106,6 +106,19 @@ class MemberCollectionItem(db.Model):
     expires_at=db.Column(db.DateTime(timezone=True),nullable=True)
     __table_args__=(db.UniqueConstraint("discord_id","item_key",name="uq_member_collection_item"),)
 
+class MemberShopPreference(db.Model):
+    """Per-member presentation settings for purchased shop cosmetics."""
+    __tablename__ = "member_shop_preferences"
+    id = db.Column(db.Integer, primary_key=True)
+    guild_id = db.Column(db.String(25), nullable=False, index=True)
+    discord_id = db.Column(db.String(25), nullable=False, index=True)
+    active_title_key = db.Column(db.String(80), nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    __table_args__ = (
+        db.UniqueConstraint("guild_id", "discord_id", name="uq_member_shop_preference"),
+    )
+
+
 class FeaturePermission(db.Model):
     __tablename__ = "feature_permissions"
     id=db.Column(db.Integer,primary_key=True)

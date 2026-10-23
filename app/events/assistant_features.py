@@ -483,6 +483,7 @@ class AssistantFeatures(commands.Cog):
             from app.database.event_models import EventParticipation
             from app.database.models import UserProfile
             from app.database.advanced_models import AchievementDefinition
+            from app.database.community_models import MemberCollectionItem, MemberShopPreference, RewardShopItem
             profile = db.session.execute(select(UserProfile).where(UserProfile.discord_id == str(member.id))).scalar_one_or_none()
             participations = db.session.execute(select(EventParticipation).where(EventParticipation.discord_id == str(member.id), EventParticipation.status == "attended")).scalars().all()
             event_ids = [row.event_id for row in participations]
@@ -516,13 +517,34 @@ class AssistantFeatures(commands.Cog):
                     continue
                 if current >= achievement.threshold:
                     earned.append(achievement.title)
+            now = datetime.now(timezone.utc)
+            owned_rows = db.session.execute(
+                select(MemberCollectionItem, RewardShopItem)
+                .join(RewardShopItem, MemberCollectionItem.item_key == RewardShopItem.key)
+                .where(MemberCollectionItem.discord_id == str(member.id))
+                .order_by(MemberCollectionItem.acquired_at.desc())
+            ).all()
+            owned_rows = [(entry, item) for entry, item in owned_rows if entry.expires_at is None or (entry.expires_at.replace(tzinfo=timezone.utc) if entry.expires_at.tzinfo is None else entry.expires_at) > now]
+            purchased_badges = [item.title for entry, item in owned_rows if item.item_type == "badge"]
+            collection_items = [item.title for entry, item in owned_rows if item.item_type == "collection"]
+            guild_id = str(interaction.guild_id or "0")
+            preference = db.session.execute(
+                select(MemberShopPreference).where(
+                    MemberShopPreference.guild_id == guild_id,
+                    MemberShopPreference.discord_id == str(member.id),
+                )
+            ).scalar_one_or_none()
+            active_title = next((item.title for entry, item in owned_rows if item.item_type == "cosmetic" and preference and item.key == preference.active_title_key), None)
         eligible = balance >= min_points
         embed = discord.Embed(title=f"📋 {member.display_name} · Kaplumbik profili", color=discord.Color.blurple())
         embed.add_field(name="Puan", value=str(balance), inline=True)
         embed.add_field(name="Katıldığı etkinlik", value=str(len(participations)), inline=True)
         embed.add_field(name="En çok oynadığı oyun", value=most_played, inline=True)
         embed.add_field(name="Son etkinlik", value=last_event.title if last_event else "Henüz yok", inline=False)
-        embed.add_field(name="Rozetler", value=", ".join(earned) if earned else "Henüz rozet yok", inline=False)
+        embed.add_field(name="Aktif unvan", value=active_title or "Seçilmedi", inline=False)
+        embed.add_field(name="Başarı rozetleri", value=", ".join(earned) if earned else "Henüz başarı rozeti yok", inline=False)
+        embed.add_field(name="Mağaza rozetleri", value=(", ".join(purchased_badges[:15])[:1000] if purchased_badges else "Henüz satın alınmış rozet yok"), inline=False)
+        embed.add_field(name="Koleksiyon", value=(", ".join(collection_items[:15])[:1000] if collection_items else "Henüz koleksiyon ürünü yok"), inline=False)
         embed.add_field(name="Çekiliş uygunluğu", value="Uygun" if eligible else f"Uygun değil (en az {min_points} puan)", inline=False)
         await interaction.followup.send(embed=embed)
 

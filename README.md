@@ -74,7 +74,10 @@ Günlük hedef Europe/Istanbul saatine göre 00.00'da yenilenir; farklı gerçek
 - `/anket`: button-based polls with one mutable vote per member.
 - `/onerigonder`, `/onerioyla`, `/oneridurum`: suggestion intake, cooldown, voting and admin status flow.
 - `/gorevler`, `/goreval`: weekly personal/shared quest progress and idempotent reward claim.
-- `/dukkan`, `/dukkanurunekle`, `/dukkanal`, `/koleksiyon`: reward shop and member collection.
+- `/dukkan`, `/dukkanurunekle`, `/dukkanal`: configurable shop listing, admin product creation, and purchases for roles, cosmetic titles, badges, and collectibles.
+- `/envanter`: list all owned shop items with their type and expiry.
+- `/unvan`: view, equip, or remove an owned cosmetic title; the active title is shown on `/profil`.
+- `/rozetler`: view purchased badge products. `/koleksiyon`: view owned collectible products. Ownership is stored in the database and survives bot restarts.
 - `/modulizin`: owner-only role/module permission configuration record.
 
 The module-permission record is not a substitute for enforcing permissions on every dashboard route and command. Those enforcement paths and remaining planned dashboard features must be reviewed before production rollout.
@@ -103,7 +106,8 @@ The module-permission record is not a substitute for enforcing permissions on ev
 - `/onerigonder`, `/onerioyla`, `/oneridurum` — suggestions, cooldown, voting and moderation status.
 - `/oyunprofil`, `/oyunarkadasi` — opt-in profile and game buddy matching.
 - `/gorevler`, `/goreval` — personal/shared weekly tasks and one-time rewards.
-- `/dukkan`, `/dukkanurunekle`, `/dukkanal`, `/koleksiyon` — configurable rewards and collection.
+- `/dukkan`, `/dukkanurunekle`, `/dukkanal` — configurable rewards and purchases, including cosmetic titles, badges, and collectibles.
+- `/envanter`, `/unvan`, `/rozetler`, `/koleksiyon` — owned shop inventory, title selection, purchased badges, and collectibles.
 - `/puangecmisi` — private recent point ledger.
 - `/sunucuhafizaoner`, `/sunucuhafizabekleyen`, `/sunucuhafizayonet` — proposed shared server knowledge requires moderator approval.
 - `/hafiziyiac`, `/hafiziyikapat`, `/hafizami`, `/hafizamitemizle` — personal AI memory is opt-in and members can view or delete their own records.

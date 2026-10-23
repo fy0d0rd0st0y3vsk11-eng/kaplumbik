@@ -4,6 +4,8 @@ import secrets
 from datetime import datetime, timezone
 
 import discord
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message, send_green_reply, edit_green_response
+
 from discord import app_commands
 from discord.ext import commands
 from sqlalchemy import select
@@ -72,11 +74,11 @@ class MemberIntroModal(discord.ui.Modal, title="Mahzen · Kendini tanıt"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.guild_id is None:
-            await interaction.response.send_message("Bu komut yalnızca Mahzen sunucusunda kullanılabilir.", ephemeral=True)
+            await send_green_response(interaction, "Bu komut yalnızca Mahzen sunucusunda kullanılabilir.", ephemeral=True)
             return
         name, info = str(self.intro_name.value).strip(), str(self.intro_info.value).strip()
         if not name or not info:
-            await interaction.response.send_message("İsim ve hakkında alanlarını doldurmalısın.", ephemeral=True)
+            await send_green_response(interaction, "İsim ve hakkında alanlarını doldurmalısın.", ephemeral=True)
             return
         app = create_app()
         try:
@@ -98,7 +100,7 @@ class MemberIntroModal(discord.ui.Modal, title="Mahzen · Kendini tanıt"):
                     target_type="member_intro", target_id=str(row.id),
                     details={"name": name, "status": "pending"}, success=True))
                 db.session.commit()
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 "Tanıtımın kaydedildi ve dashboard'da onay bekliyor. Onaylandıktan sonra /kisitanit listesinde görünecek. 🐢",
                 ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         except Exception:
@@ -106,7 +108,7 @@ class MemberIntroModal(discord.ui.Modal, title="Mahzen · Kendini tanıt"):
                 db.session.rollback()
             logger.exception("Member self-intro submission failed")
             if not interaction.response.is_done():
-                await interaction.response.send_message("Tanıtım kaydedilemedi. Birazdan tekrar dene.", ephemeral=True)
+                await send_green_response(interaction, "Tanıtım kaydedilemedi. Birazdan tekrar dene.", ephemeral=True)
 
 
 def _giveaway_snapshot(giveaway_id):
@@ -151,7 +153,7 @@ class PersonSelect(discord.ui.Select):
         try:
             result = _person_info(self.values[0], interaction.guild_id)
             if result is None:
-                await interaction.response.send_message(
+                await send_green_response(interaction, 
                     "Bu kişi kaydı artık bulunmuyor. Paneldeki liste yenilenmeli.",
                     ephemeral=True,
                 )
@@ -163,14 +165,14 @@ class PersonSelect(discord.ui.Select):
                 color=discord.Color.from_rgb(166, 143, 255),
             )
             embed.set_footer(text="Mahzen · Kişi tanıtımı")
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 embed=embed, ephemeral=True,
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         except Exception:
             logger.exception("Person intro select failed")
             if not interaction.response.is_done():
-                await interaction.response.send_message(
+                await send_green_response(interaction, 
                     "Kişi tanıtımı yüklenemedi. Birazdan tekrar dene.",
                     ephemeral=True,
                 )
@@ -194,7 +196,7 @@ class PersonPageButton(discord.ui.Button):
             return
         view.page = max(0, min(view.page + self.direction, view.page_count - 1))
         view.refresh_items()
-        await interaction.response.edit_message(view=view)
+        await edit_green_response(interaction, view=view)
 
 
 class PersonSelectView(discord.ui.View):
@@ -223,7 +225,7 @@ class MahzenCommands(commands.Cog):
     @app_commands.command(name="kendinitanit", description="İsim ve hakkında bilgilerini girerek tanıtımını onaya gönder.")
     async def self_intro(self, interaction: discord.Interaction):
         if interaction.guild_id is None:
-            await interaction.response.send_message("Bu komut yalnızca Mahzen sunucusunda kullanılabilir.", ephemeral=True)
+            await send_green_response(interaction, "Bu komut yalnızca Mahzen sunucusunda kullanılabilir.", ephemeral=True)
             return
         await interaction.response.send_modal(MemberIntroModal())
 
@@ -231,12 +233,12 @@ class MahzenCommands(commands.Cog):
     async def person_directory(self, interaction: discord.Interaction):
         people = _get_people(interaction.guild_id)
         if not people:
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 "Henüz kişi tanıtımı eklenmemiş. Yönetim panelindeki Kişi tanıtımları bölümünden eklenebilir.",
                 ephemeral=True,
             )
             return
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             "Kimi merak ettin? Aşağıdaki listeden birini seç. 🐢",
             view=PersonSelectView(people),
             ephemeral=True,
@@ -257,9 +259,9 @@ class MahzenCommands(commands.Cog):
                 for row in rows
             ]
         if not items:
-            await interaction.response.send_message("Şu an açık çekiliş yok. Yeni çekilişler panelden eklenir. 🎁")
+            await send_green_response(interaction, "Şu an açık çekiliş yok. Yeni çekilişler panelden eklenir. 🎁")
             return
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             "\n\n".join(items)[:1900],
             allowed_mentions=discord.AllowedMentions.none(),
         )
@@ -268,7 +270,7 @@ class MahzenCommands(commands.Cog):
     async def giveaway_info(self, interaction: discord.Interaction, cekilis_id: int):
         data = _giveaway_snapshot(cekilis_id)
         if not data:
-            await interaction.response.send_message("Bu numarayla bir çekiliş bulamadım.", ephemeral=True)
+            await send_green_response(interaction, "Bu numarayla bir çekiliş bulamadım.", ephemeral=True)
             return
         when = f"<t:{int(data['starts_at'].timestamp())}:F>" if data["starts_at"] else "Belirtilmemiş"
         winner = f"<@{data['winner']}>" if data["winner"] else "Henüz belirlenmedi"
@@ -282,7 +284,7 @@ class MahzenCommands(commands.Cog):
         embed.add_field(name="Durum", value=data["status"], inline=True)
         embed.add_field(name="Katılımcı sayısı", value=str(len(data["participants"])), inline=True)
         embed.add_field(name="Kazanan", value=winner, inline=False)
-        await interaction.response.send_message(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        await send_green_response(interaction, embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
     @app_commands.command(name="cekiliskatil", description="Puan şartını karşılıyorsan açık Mahzen çekilişine katıl.")
     async def giveaway_join(self, interaction: discord.Interaction, cekilis_id: int):
@@ -291,14 +293,14 @@ class MahzenCommands(commands.Cog):
             with app.app_context():
                 giveaway = db.session.execute(select(Giveaway).where(Giveaway.id == cekilis_id).with_for_update()).scalar_one_or_none()
                 if giveaway is None:
-                    await interaction.response.send_message("Bu çekilişi bulamadım.", ephemeral=True)
+                    await send_green_response(interaction, "Bu çekilişi bulamadım.", ephemeral=True)
                     return
                 if giveaway.status != "open":
-                    await interaction.response.send_message("Bu çekiliş artık katılıma açık değil.", ephemeral=True)
+                    await send_green_response(interaction, "Bu çekiliş artık katılıma açık değil.", ephemeral=True)
                     return
                 starts_at = _aware(giveaway.starts_at)
                 if starts_at and datetime.now(timezone.utc) >= starts_at:
-                    await interaction.response.send_message("Katılım saati dolmuş. Yönetici çekilişi sonuçlandırabilir.", ephemeral=True)
+                    await send_green_response(interaction, "Katılım saati dolmuş. Yönetici çekilişi sonuçlandırabilir.", ephemeral=True)
                     return
                 minimum = int(get_setting("giveaway_min_points", "100") or "100")
                 profile = db.session.execute(
@@ -306,7 +308,7 @@ class MahzenCommands(commands.Cog):
                 ).scalar_one_or_none()
                 balance = profile.balance if profile else 0
                 if balance < minimum:
-                    await interaction.response.send_message(
+                    await send_green_response(interaction, 
                         f"Bu çekilişe katılmak için en az {minimum} Mahzen puanı gerekiyor. Mevcut bakiyen: {balance}.",
                         ephemeral=True,
                     )
@@ -318,7 +320,7 @@ class MahzenCommands(commands.Cog):
                     )
                 ).scalar_one_or_none()
                 if exists:
-                    await interaction.response.send_message("Zaten katılmışsın! İkinci bir bilet yazmıyorum. 🐢", ephemeral=True)
+                    await send_green_response(interaction, "Zaten katılmışsın! İkinci bir bilet yazmıyorum. 🐢", ephemeral=True)
                     return
                 db.session.add(GiveawayParticipant(
                     giveaway_id=giveaway.id,
@@ -327,7 +329,7 @@ class MahzenCommands(commands.Cog):
                 db.session.commit()
                 title = giveaway.title
                 prize = giveaway.prize
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 f"🎟️ {title} çekilişine katıldın! Ödül: {prize}. Bol şans!",
                 ephemeral=True,
                 allowed_mentions=discord.AllowedMentions.none(),
@@ -336,26 +338,26 @@ class MahzenCommands(commands.Cog):
             with app.app_context():
                 db.session.rollback()
             if not interaction.response.is_done():
-                await interaction.response.send_message("Zaten katılmış görünüyorsun.", ephemeral=True)
+                await send_green_response(interaction, "Zaten katılmış görünüyorsun.", ephemeral=True)
         except Exception:
             with app.app_context():
                 db.session.rollback()
             logger.exception("Could not join giveaway")
             if not interaction.response.is_done():
-                await interaction.response.send_message("Çekilişe katılım kaydedilemedi. Birazdan tekrar dene.", ephemeral=True)
+                await send_green_response(interaction, "Çekilişe katılım kaydedilemedi. Birazdan tekrar dene.", ephemeral=True)
 
     @app_commands.command(name="cekiliskatilimlar", description="Bir çekilişin katılımcılarını yönetici olarak gör.")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def giveaway_participants(self, interaction: discord.Interaction, cekilis_id: int):
         data = _giveaway_snapshot(cekilis_id)
         if not data:
-            await interaction.response.send_message("Bu çekilişi bulamadım.", ephemeral=True)
+            await send_green_response(interaction, "Bu çekilişi bulamadım.", ephemeral=True)
             return
         if not data["participants"]:
-            await interaction.response.send_message(f"#{cekilis_id} çekilişine henüz kimse katılmamış.", ephemeral=True)
+            await send_green_response(interaction, f"#{cekilis_id} çekilişine henüz kimse katılmamış.", ephemeral=True)
             return
         lines = [f"• <@{user_id}> — {user_id}" for user_id in data["participants"]]
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             f"#{cekilis_id} · {data['title']} — {len(lines)} katılımcı\n" + "\n".join(lines)[:1700],
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
@@ -365,14 +367,14 @@ class MahzenCommands(commands.Cog):
     async def giveaway_winner(self, interaction: discord.Interaction, cekilis_id: int):
         data = _giveaway_snapshot(cekilis_id)
         if not data:
-            await interaction.response.send_message("Bu çekilişi bulamadım.", ephemeral=True)
+            await send_green_response(interaction, "Bu çekilişi bulamadım.", ephemeral=True)
         elif data["winner"]:
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 f"🎉 #{cekilis_id} · {data['title']} kazananı: <@{data['winner']}>",
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         else:
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 f"#{cekilis_id} · {data['title']} için henüz kazanan belirlenmedi.",
                 ephemeral=True,
             )
@@ -385,20 +387,20 @@ class MahzenCommands(commands.Cog):
             with app.app_context():
                 giveaway = db.session.execute(select(Giveaway).where(Giveaway.id == cekilis_id).with_for_update()).scalar_one_or_none()
                 if giveaway is None:
-                    await interaction.response.send_message("Bu çekilişi bulamadım.", ephemeral=True)
+                    await send_green_response(interaction, "Bu çekilişi bulamadım.", ephemeral=True)
                     return
                 if giveaway.status != "open":
-                    await interaction.response.send_message("Bu çekiliş zaten kapatılmış.", ephemeral=True)
+                    await send_green_response(interaction, "Bu çekiliş zaten kapatılmış.", ephemeral=True)
                     return
                 starts_at = _aware(giveaway.starts_at)
                 if starts_at and datetime.now(timezone.utc) < starts_at:
-                    await interaction.response.send_message("Çekiliş zamanı henüz gelmedi; zamanı gelince tekrar dene.", ephemeral=True)
+                    await send_green_response(interaction, "Çekiliş zamanı henüz gelmedi; zamanı gelince tekrar dene.", ephemeral=True)
                     return
                 entrants = db.session.execute(
                     select(GiveawayParticipant).where(GiveawayParticipant.giveaway_id == giveaway.id)
                 ).scalars().all()
                 if not entrants:
-                    await interaction.response.send_message("Katılımcı yok; kazanan seçilmedi.", ephemeral=True)
+                    await send_green_response(interaction, "Katılımcı yok; kazanan seçilmedi.", ephemeral=True)
                     return
                 winner = secrets.choice(entrants)
                 giveaway.winner_discord_id = winner.discord_id
@@ -418,7 +420,7 @@ class MahzenCommands(commands.Cog):
                     success=True,
                 ))
                 db.session.commit()
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 f"🎉 {title} çekilişi tamamlandı! Ödül: {prize} · Kazanan: <@{winner_id}>",
                 allowed_mentions=discord.AllowedMentions.none(),
             )
@@ -427,7 +429,7 @@ class MahzenCommands(commands.Cog):
                 db.session.rollback()
             logger.exception("Could not finish giveaway")
             if not interaction.response.is_done():
-                await interaction.response.send_message("Çekiliş bitirilemedi. Paneldeki işlem kayıtlarını kontrol et.", ephemeral=True)
+                await send_green_response(interaction, "Çekiliş bitirilemedi. Paneldeki işlem kayıtlarını kontrol et.", ephemeral=True)
 
     @app_commands.command(name="mahzenbilgi", description="Yönetim paneline kaydedilen Mahzen bilgilerini göster.")
     async def server_knowledge(self, interaction: discord.Interaction):
@@ -447,13 +449,13 @@ class MahzenCommands(commands.Cog):
         sections.extend(games)
         content = "\n\n".join(sections)
         chunks = [content[index:index + 1900] for index in range(0, len(content), 1900)] or ["Mahzen bilgisi henüz boş."]
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             chunks[0],
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )
         for chunk in chunks[1:]:
-            await interaction.followup.send(
+            await send_green_followup(interaction, 
                 chunk,
                 ephemeral=True,
                 allowed_mentions=discord.AllowedMentions.none(),
@@ -469,7 +471,7 @@ class MahzenCommands(commands.Cog):
                 ("Among Us oda kodu", get_setting("among_us_room_code", "")),
             ]
         lines = [f"**{label}:** {discord.utils.escape_mentions(value)}" for label, value in rows if (value or "").strip()]
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             "\n".join(lines) if lines else "Oyun bağlantıları henüz dashboard'a eklenmemiş.",
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
@@ -498,7 +500,7 @@ class MahzenCommands(commands.Cog):
                     "attended": sum(row.status == "attended" for row in rows),
                 }
         if data is None:
-            await interaction.response.send_message("Bu etkinliği bulamadım.", ephemeral=True)
+            await send_green_response(interaction, "Bu etkinliği bulamadım.", ephemeral=True)
             return
         when = f"<t:{int(data['starts_at'].timestamp())}:F>" if data["starts_at"] else "Belirtilmemiş"
         embed = discord.Embed(
@@ -512,7 +514,7 @@ class MahzenCommands(commands.Cog):
         embed.add_field(name="Katılacağım", value=str(data["going"]), inline=True)
         embed.add_field(name="Katılmayacağım", value=str(data["not_going"]), inline=True)
         embed.add_field(name="Katıldığı onaylandı", value=str(data["attended"]), inline=True)
-        await interaction.response.send_message(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        await send_green_response(interaction, embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
     @app_commands.command(name="cekilisarsiv", description="Sonuçlanmış Mahzen çekilişlerini ve kazananlarını göster.")
     async def giveaway_archive(self, interaction: discord.Interaction):
@@ -525,14 +527,14 @@ class MahzenCommands(commands.Cog):
                 f"**#{row.id} · {discord.utils.escape_markdown(row.title)}** — ödül: {discord.utils.escape_markdown(row.prize)} — kazanan: <@{row.winner_discord_id}>"
                 for row in rows
             ]
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             "\n".join(lines)[:1900] if lines else "Henüz sonuçlanmış çekiliş yok.",
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
     @app_commands.command(name="mahzenkomutlar", description="Kaplumbik'in Mahzen'e özel komutlarını göster.")
     async def mahzen_commands(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             "**Mahzen komutları**\n"
             "• /kendinitanit — tanıtımını yazıp onaya gönder\n"
             "• /kisitanit — onaylı kişi tanıtımlarını listeden seçip oku\n"

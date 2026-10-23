@@ -3,6 +3,8 @@ import os
 import threading
 
 import discord
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message
+
 from discord import app_commands
 from discord.ext import commands
 from waitress import serve
@@ -48,9 +50,9 @@ class KaplumbikBot(commands.Bot):
             message = "Komut çalışırken bir hata oluştu. Hata kaydı oluşturuldu; birazdan tekrar dene."
         try:
             if interaction.response.is_done():
-                await interaction.followup.send(message, ephemeral=True)
+                await send_green_followup(interaction, message, ephemeral=True)
             else:
-                await interaction.response.send_message(message, ephemeral=True)
+                await send_green_response(interaction, message, ephemeral=True)
         except discord.HTTPException:
             logger.exception("Slash komut hata mesajı gönderilemedi.")
 

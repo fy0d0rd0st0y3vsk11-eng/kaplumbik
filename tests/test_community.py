@@ -56,7 +56,9 @@ def test_parse_poll_suggestion_accepts_json_and_fenced_json():
     from app.events.community import _parse_poll_suggestion
     expected={"question":"Hangi oyun?","options":["Among Us","Minecraft"]}
     assert _parse_poll_suggestion('{"question":"Hangi oyun?","options":["Among Us","Minecraft"]}') == expected
-    assert _parse_poll_suggestion('\\`\\`\\`json\\n{"question":"Hangi oyun?","options":["Among Us","Minecraft"]}\\n\\`\\`\\`') == expected
+    assert _parse_poll_suggestion('''```json
+{"question":"Hangi oyun?","options":["Among Us","Minecraft"]}
+```''') == expected
 
 
 @pytest.mark.parametrize("raw", [None, "", "   ", "not json", "[]", '{"question":"Eksik","options":[]}'])

@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from app import create_app
 from app.database import db
-from app.database.community_models import CommunityPoll, CommunityPollVote, CommunitySuggestion, CommunitySuggestionVote, MemberGameProfile, RewardShopItem, WeeklyQuest, WeeklyQuestProgress
+from app.database.community_models import CommunityPoll, CommunityPollVote, CommunitySuggestion, CommunitySuggestionVote, MemberGameProfile, RewardShopItem, MemberCollectionItem, MemberShopPreference, WeeklyQuest, WeeklyQuestProgress
 
 @pytest.fixture
 def app():
@@ -112,3 +112,41 @@ def test_dashboard_creates_and_selects_streak_channel(app, monkeypatch):
     with app.app_context():
         saved=db.session.get(BotSetting,"streak_channel_id")
         assert saved.value == "33333333333333333"
+
+
+def test_shop_cosmetic_badge_and_collection_ownership_persist(app):
+    with app.app_context():
+        products = [
+            RewardShopItem(key="title_member", title="Mahzen Müdavimi", item_type="cosmetic", price=100, enabled=True),
+            RewardShopItem(key="badge_first", title="İlk Gelen", item_type="badge", price=150, enabled=True),
+            RewardShopItem(key="collection_card_01", title="Mahzen Kartı 01", item_type="collection", price=200, enabled=True),
+        ]
+        db.session.add_all(products)
+        db.session.flush()
+        db.session.add_all([
+            MemberCollectionItem(discord_id="123", item_key="title_member", source="purchase"),
+            MemberCollectionItem(discord_id="123", item_key="badge_first", source="purchase"),
+            MemberCollectionItem(discord_id="123", item_key="collection_card_01", source="purchase"),
+        ])
+        db.session.add(MemberShopPreference(guild_id="999", discord_id="123", active_title_key="title_member"))
+        db.session.commit()
+        db.session.expire_all()
+
+        owned = db.session.query(MemberCollectionItem).filter_by(discord_id="123").all()
+        preference = MemberShopPreference.query.filter_by(guild_id="999", discord_id="123").one()
+        assert {row.item_key for row in owned} == {"title_member", "badge_first", "collection_card_01"}
+        assert preference.active_title_key == "title_member"
+        assert RewardShopItem.query.filter_by(item_type="cosmetic").one().title == "Mahzen Müdavimi"
+        assert RewardShopItem.query.filter_by(item_type="badge").one().title == "İlk Gelen"
+        assert RewardShopItem.query.filter_by(item_type="collection").one().title == "Mahzen Kartı 01"
+
+
+def test_member_shop_preference_is_unique_per_guild_member(app):
+    with app.app_context():
+        db.session.add(MemberShopPreference(guild_id="999", discord_id="123", active_title_key="title_member"))
+        db.session.commit()
+        db.session.add(MemberShopPreference(guild_id="999", discord_id="123", active_title_key="another_title"))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+        assert MemberShopPreference.query.filter_by(guild_id="999", discord_id="123").count() == 1

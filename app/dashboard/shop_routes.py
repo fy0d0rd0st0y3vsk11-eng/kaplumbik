@@ -56,7 +56,7 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 <div class="item"><div class="item-head"><h3>{{ item.title }} <span class="pill">{{ item.item_type }}</span></h3><span class="pill">{{ 'Yayında' if item.enabled else 'Gizli' }}</span></div>
 <p>{{ item.description or 'Açıklama yok.' }}</p><p><strong>{{ item.price }} coin</strong> · Anahtar: <code>{{ item.key }}</code>{% if item.duration_days %} · {{ item.duration_days }} gün{% else %} · Kalıcı{% endif %}{% if item.discord_role_id %} · Rol ID: {{ item.discord_role_id }}{% endif %}</p>
 <form method="post" action="{{ url_for('dashboard.shop_update', item_id=item.id) }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="key" value="{{ item.key }}">
 <div class="grid">
 <div><label>Görünen ad</label><input name="title" maxlength="120" value="{{ item.title }}" required></div>
 <div><label>Fiyat</label><input name="price" type="number" min="0" max="1000000" value="{{ item.price }}" required></div>

@@ -543,8 +543,8 @@ class AssistantFeatures(commands.Cog):
         embed.add_field(name="Son etkinlik", value=last_event.title if last_event else "Henüz yok", inline=False)
         embed.add_field(name="Aktif unvan", value=active_title or "Seçilmedi", inline=False)
         embed.add_field(name="Başarı rozetleri", value=", ".join(earned) if earned else "Henüz başarı rozeti yok", inline=False)
-        embed.add_field(name="Mağaza rozetleri", value=", ".join(purchased_badges[:15]) if purchased_badges else "Henüz satın alınmış rozet yok", inline=False)
-        embed.add_field(name="Koleksiyon", value=", ".join(collection_items[:15]) if collection_items else "Henüz koleksiyon ürünü yok", inline=False)
+        embed.add_field(name="Mağaza rozetleri", value=(", ".join(purchased_badges[:15])[:1000] if purchased_badges else "Henüz satın alınmış rozet yok"), inline=False)
+        embed.add_field(name="Koleksiyon", value=(", ".join(collection_items[:15])[:1000] if collection_items else "Henüz koleksiyon ürünü yok"), inline=False)
         embed.add_field(name="Çekiliş uygunluğu", value="Uygun" if eligible else f"Uygun değil (en az {min_points} puan)", inline=False)
         await interaction.followup.send(embed=embed)
 

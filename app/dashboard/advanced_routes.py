@@ -12,7 +12,7 @@ from flask import flash, redirect, render_template_string, request, session, url
 
 from app.database import db
 from app.core.config import settings
-from app.database.advanced_models import AchievementDefinition, AnnouncementLog, BotSetting, Giveaway, GiveawayParticipant, PersonProfile
+from app.database.advanced_models import AchievementDefinition, AnnouncementLog, BotSetting, Giveaway, GiveawayParticipant, PersonProfile, MemberIntro
 from app.database.event_models import Event
 from app.database.models import AuditLog, UserProfile
 from app.events.feature_service import get_setting, set_setting, health_snapshot, seed_achievements
@@ -53,6 +53,20 @@ button,.button,a.button{display:inline-flex;align-items:center;justify-content:c
 <section><div class="section-head"><h2>👥 Kişi tanıtımları</h2><span class="pill">{{ people|length }} kayıt</span></div><p class="muted">Discord'da /kisitanit komutuyla üyeler listeden bir kişiyi seçebilir. Her profil ayrı kaydedilir.</p>
 <form id="person-new" method="post" action="{{ url_for('dashboard.person_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="grid"><div><label>Kişinin adı</label><input name="name" maxlength="100" required placeholder="Örn. Fedya"></div><div><label>Kişi hakkında paylaşılabilir bilgiler</label><textarea name="info" maxlength="4000" required placeholder="İlgi alanları, sunucudaki rolü, hobileri..."></textarea></div></div><button type="submit">＋ Kişiyi ekle ve kaydet</button></form>
 {% for person in people %}<div class="person-card"><form id="person-edit-{{ person.id }}" method="post" action="{{ url_for('dashboard.person_update', person_id=person.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="grid"><div><label>Kişinin adı</label><input name="name" maxlength="100" value="{{ person.name }}" required></div><div><label>Hakkında</label><textarea name="info" maxlength="4000" required>{{ person.info }}</textarea></div></div><button type="submit">Değişiklikleri kaydet</button></form><form id="person-delete-{{ person.id }}" method="post" action="{{ url_for('dashboard.person_delete', person_id=person.id) }}" onsubmit="return confirm('Bu kişi tanıtımını silmek istiyor musun?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Kişiyi sil</button></form></div>{% else %}<p class="muted">Henüz kişi tanıtımı eklenmedi.</p>{% endfor %}</section>
+<section><div class="section-head"><h2>📝 Üye tanıtımları</h2><span class="pill">{{ member_intros|length }} kayıt</span></div>
+<p class="muted">Üyeler /kendinitanit ile iki alan doldurur. Yalnızca onaylanan tanıtımlar /kisitanit listesinde görünür.</p>
+{% for intro in member_intros %}
+<div class="person-card"><div class="section-head"><strong>{{ intro.name }}</strong><span class="pill">{{ intro.status }}</span></div>
+<p class="muted">Discord ID: {{ intro.discord_id }} · {{ local_time(intro.updated_at) }}</p><pre class="preview">{{ intro.info }}</pre>
+<form method="post" action="{{ url_for('dashboard.member_intro_update', intro_id=intro.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>İsim</label><input name="name" maxlength="100" value="{{ intro.name }}" required><label>Hakkında</label><textarea name="info" maxlength="1000" required>{{ intro.info }}</textarea><button type="submit">Düzenle ve yeniden onaya gönder</button></form>
+<div class="grid">
+{% if intro.status != 'approved' %}<form method="post" action="{{ url_for('dashboard.member_intro_review', intro_id=intro.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="decision" value="approved"><button type="submit">✓ Onayla</button></form>{% endif %}
+{% if intro.status != 'rejected' %}<form method="post" action="{{ url_for('dashboard.member_intro_review', intro_id=intro.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="decision" value="rejected"><button class="danger" type="submit">Reddet</button></form>{% endif %}
+<form method="post" action="{{ url_for('dashboard.member_intro_delete', intro_id=intro.id) }}" onsubmit="return confirm('Bu üye tanıtımını silmek istiyor musun?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="danger" type="submit">Sil</button></form>
+</div></div>
+{% else %}<p class="muted">Henüz üyeler tarafından gönderilmiş tanıtım yok.</p>{% endfor %}
+</section>
 <section><div class="section-head"><h2>🎁 Mahzen çekilişleri</h2><span class="pill">{{ giveaways|length }} kayıt</span></div><p class="muted">Ödülü, başlama saatini ve şartları gir. Katılımcılar ve kazanan kaydı burada tutulur.</p>
 <form id="giveaway-new" method="post" action="{{ url_for('dashboard.giveaway_save') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><div class="grid"><div><label>Çekiliş adı</label><input name="title" maxlength="150" required placeholder="Mahzen hafta sonu çekilişi"></div><div><label>Ödül</label><input name="prize" maxlength="300" required placeholder="Örn. özel rol / oyun hediyesi"></div><div><label>Başlangıç zamanı (Türkiye saati)</label><input name="starts_at" type="datetime-local" required></div></div><label>Açıklama ve katılım şartları</label><textarea name="description" maxlength="1500" placeholder="Katılım şartları, son katılım saati vb."></textarea><button type="submit">＋ Çekilişi oluştur ve kaydet</button></form>
 {% for giveaway in giveaways %}<div class="giveaway-card"><div class="section-head"><h3>#{{ giveaway.id }} · {{ giveaway.title }}</h3><span class="pill">{{ giveaway.status }}</span></div><p><strong>Ödül:</strong> {{ giveaway.prize }}</p><p class="muted">{{ giveaway.description }}</p><p><strong>Başlangıç:</strong> {{ local_time(giveaway.starts_at) }} · <strong>Katılımcı:</strong> {{ giveaway.participants|length }}</p><p><strong>Kazanan:</strong> {% if giveaway.winner_discord_id %}&lt;@{{ giveaway.winner_discord_id }}&gt; ({{ giveaway.winner_discord_id }}){% else %}Henüz belirlenmedi{% endif %}</p>{% if giveaway.participants %}<details><summary>Katılanları göster</summary><ul>{% for entrant in giveaway.participants %}<li>&lt;@{{ entrant.discord_id }}&gt; · {{ entrant.discord_id }}</li>{% endfor %}</ul></details>{% endif %}{% if giveaway.status == 'open' %}<form id="giveaway-end-{{ giveaway.id }}" method="post" action="{{ url_for('dashboard.giveaway_end', giveaway_id=giveaway.id) }}" onsubmit="return confirm('Bu çekilişi bitirip rastgele kazanan seçilsin mi?')"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Çekilişi bitir ve kazanan seç</button></form>{% endif %}</div>{% else %}<p class="muted">Henüz çekiliş oluşturulmadı.</p>{% endfor %}</section>
@@ -321,6 +335,7 @@ def advanced_index():
     values["event_announcement_template"] = _normalize_template(get_setting("event_announcement_template", ""))
     values["server_knowledge"] = get_setting("server_knowledge", "")
     people = db.session.query(PersonProfile).order_by(PersonProfile.name.asc()).limit(200).all()
+    member_intros = db.session.query(MemberIntro).order_by(MemberIntro.status.asc(), MemberIntro.created_at.desc()).limit(300).all()
     achievements = db.session.query(AchievementDefinition).order_by(AchievementDefinition.id).all()
     health = health_snapshot(30)
     audit_logs = db.session.query(AuditLog).order_by(AuditLog.id.desc()).limit(50).all()
@@ -333,7 +348,7 @@ def advanced_index():
         member_query = member_query.filter(or_(UserProfile.discord_id == member_q, UserProfile.username.ilike(f"%{member_q}%")))
     members = member_query.order_by(UserProfile.balance.desc()).limit(100).all()
     giveaways = db.session.query(Giveaway).order_by(Giveaway.starts_at.desc()).limit(50).all()
-    return render_template_string(SETTINGS_PAGE, values=values, people=people, giveaways=giveaways, achievements=achievements, health=health, audit_logs=audit_logs, announcement_logs=announcement_logs, cancelled_events=cancelled_events, members=members, member_q=member_q, csrf_token=session.get("csrf_token", ""), local_time=_local_time)
+    return render_template_string(SETTINGS_PAGE, values=values, people=people, member_intros=member_intros, giveaways=giveaways, achievements=achievements, health=health, audit_logs=audit_logs, announcement_logs=announcement_logs, cancelled_events=cancelled_events, members=members, member_q=member_q, csrf_token=session.get("csrf_token", ""), local_time=_local_time)
 
 
 
@@ -647,4 +662,80 @@ def resend_announcement(log_id):
         db.session.rollback()
         logger.exception("Could not queue announcement resend")
         flash(f"Yeniden gönderim kuyruğa alınamadı: {str(exc)[:180]}")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/member-intros/<int:intro_id>/review")
+@owner_required
+def member_intro_review(intro_id):
+    _require_csrf()
+    intro = db.session.get(MemberIntro, intro_id)
+    if intro is None:
+        flash("Bu üye tanıtımı bulunamadı.")
+        return redirect(url_for("dashboard.advanced_index"))
+    decision = request.form.get("decision", "")
+    if decision not in {"approved", "rejected"}:
+        flash("Geçersiz tanıtım kararı.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        intro.status = decision
+        intro.reviewed_by = str(session["discord_id"])
+        db.session.add(AuditLog(actor_discord_id=str(session["discord_id"]),
+            action=f"member_intro.{decision}", target_type="member_intro", target_id=str(intro.id),
+            details={"name": intro.name, "discord_id": intro.discord_id}, success=True))
+        db.session.commit()
+        flash(f"{intro.name} tanıtımı " + ("onaylandı ve listede görünür." if decision == "approved" else "reddedildi."))
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not review member intro")
+        flash("Üye tanıtımı güncellenemedi.")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/member-intros/<int:intro_id>/update")
+@owner_required
+def member_intro_update(intro_id):
+    _require_csrf()
+    intro = db.session.get(MemberIntro, intro_id)
+    if intro is None:
+        flash("Bu üye tanıtımı bulunamadı.")
+        return redirect(url_for("dashboard.advanced_index"))
+    name, info = request.form.get("name", "").strip(), request.form.get("info", "").strip()
+    if not name or not info or len(name) > 100 or len(info) > 1000:
+        flash("İsim ve hakkında alanları boş olamaz; sınırlar 100 ve 1000 karakter.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        intro.name, intro.info, intro.status, intro.reviewed_by = name, info, "pending", None
+        db.session.add(AuditLog(actor_discord_id=str(session["discord_id"]),
+            action="member_intro.edit", target_type="member_intro", target_id=str(intro.id),
+            details={"name": name, "discord_id": intro.discord_id, "status": "pending"}, success=True))
+        db.session.commit()
+        flash(f"{name} düzenlendi ve yeniden onaya gönderildi.")
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not edit member intro")
+        flash("Üye tanıtımı düzenlenemedi.")
+    return redirect(url_for("dashboard.advanced_index"))
+
+
+@dashboard_bp.post("/advanced/member-intros/<int:intro_id>/delete")
+@owner_required
+def member_intro_delete(intro_id):
+    _require_csrf()
+    intro = db.session.get(MemberIntro, intro_id)
+    if intro is None:
+        flash("Bu üye tanıtımı zaten bulunmuyor.")
+        return redirect(url_for("dashboard.advanced_index"))
+    try:
+        name = intro.name
+        db.session.add(AuditLog(actor_discord_id=str(session["discord_id"]),
+            action="member_intro.delete", target_type="member_intro", target_id=str(intro.id),
+            details={"name": name, "discord_id": intro.discord_id}, success=True))
+        db.session.delete(intro)
+        db.session.commit()
+        flash(f"{name} üye tanıtımı silindi.")
+    except Exception:
+        db.session.rollback()
+        logger.exception("Could not delete member intro")
+        flash("Üye tanıtımı silinemedi.")
     return redirect(url_for("dashboard.advanced_index"))

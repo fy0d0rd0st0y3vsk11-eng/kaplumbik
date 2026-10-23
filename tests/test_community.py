@@ -52,6 +52,20 @@ def test_weekly_quest_progress_is_unique_per_member(app):
         db.session.rollback()
         assert WeeklyQuestProgress.query.filter_by(quest_id=quest.id,discord_id="3").count()==1
 
+def test_parse_poll_suggestion_accepts_json_and_fenced_json():
+    from app.events.community import _parse_poll_suggestion
+    expected={"question":"Hangi oyun?","options":["Among Us","Minecraft"]}
+    assert _parse_poll_suggestion('{"question":"Hangi oyun?","options":["Among Us","Minecraft"]}') == expected
+    assert _parse_poll_suggestion('\\`\\`\\`json\\n{"question":"Hangi oyun?","options":["Among Us","Minecraft"]}\\n\\`\\`\\`') == expected
+
+
+@pytest.mark.parametrize("raw", [None, "", "   ", "not json", "[]", '{"question":"Eksik","options":[]}'])
+def test_parse_poll_suggestion_rejects_empty_or_invalid_responses(raw):
+    from app.events.community import _parse_poll_suggestion
+    with pytest.raises((ValueError, TypeError)):
+        _parse_poll_suggestion(raw)
+
+
 def test_expiry_checks_accept_sqlite_naive_datetimes():
     from app.events.community import as_utc, is_expired
     naive_past=datetime(2020,1,1)

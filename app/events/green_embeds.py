@@ -33,6 +33,40 @@ def make_green_embed(
     return result
 
 
+async def send_green_reply(message: Any, *args: Any, **kwargs: Any) -> Any:
+    """Reply to a Discord message with the shared green theme."""
+    content = kwargs.pop("content", None)
+    embed = kwargs.pop("embed", None)
+    embeds = kwargs.pop("embeds", None)
+    if args:
+        first, *remaining = args
+        if isinstance(first, str):
+            content = first if content is None else content
+        elif isinstance(first, discord.Embed):
+            embed = first if embed is None else embed
+        else:
+            remaining.insert(0, first)
+        args = tuple(remaining)
+    if embed is None and embeds:
+        embeds = [make_green_embed(embed=item) for item in embeds]
+    elif embed is not None:
+        embed = make_green_embed(embed=embed)
+    elif isinstance(content, str) and len(content) <= 4096:
+        embed = make_green_embed(content)
+        content = None
+    elif isinstance(content, str):
+        log.warning("Long reply left as plain text to avoid truncation.")
+    if embed is None and not embeds and content is None:
+        embed = make_green_embed()
+    if embeds is not None:
+        kwargs["embeds"] = embeds
+    elif embed is not None:
+        kwargs["embed"] = embed
+    if content is not None:
+        kwargs["content"] = content
+    return await message.reply(*args, **kwargs)
+
+
 async def send_green_message(destination: Any, *args: Any, **kwargs: Any) -> Any:
     """Send a channel or DM message with the shared green theme."""
     content = kwargs.pop("content", None)

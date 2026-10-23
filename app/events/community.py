@@ -20,6 +20,32 @@ from app.events.feature_service import get_setting
 log = logging.getLogger("kaplumbik.community")
 TR = ZoneInfo("Europe/Istanbul")
 
+def _parse_poll_suggestion(raw):
+    """Parse and validate the JSON object returned by the poll-suggestion model."""
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError("AI returned empty poll suggestion text")
+    candidate = raw.strip()
+    start = candidate.find("{")
+    end = candidate.rfind("}")
+    if start < 0 or end < start:
+        raise ValueError("AI response did not contain a JSON object")
+    parsed = json.loads(candidate[start:end + 1])
+    if not isinstance(parsed, dict):
+        raise ValueError("AI response JSON was not an object")
+    question = parsed.get("question")
+    options = parsed.get("options")
+    if not isinstance(question, str) or not isinstance(options, list):
+        raise ValueError("AI response must contain a question and an options list")
+    clean_options = list(dict.fromkeys(
+        value.strip()[:80] for value in options
+        if isinstance(value, str) and value.strip()
+    ))[:5]
+    result = {"question": question.strip()[:300], "options": clean_options}
+    if not result["question"] or len(clean_options) < 2:
+        raise ValueError("AI output did not contain a valid question and at least two options")
+    return result
+
+
 def utcnow():
     return datetime.now(timezone.utc)
 
@@ -245,16 +271,45 @@ class MahzenCommunity(commands.Cog):
             await interaction.response.send_message("Konu 1–300 karakter olmalı.",ephemeral=True); return
         await interaction.response.defer(thinking=True,ephemeral=True)
         def request_suggestion():
-            response=requests.post("https://openrouter.ai/api/v1/chat/completions",headers={"Authorization":f"Bearer {settings.openrouter_api_key}","Content-Type":"application/json"},json={"model":settings.openrouter_model,"temperature":0.5,"max_tokens":250,"messages":[{"role":"system","content":"Türkçe Discord topluluğu için tarafsız, kısa anket taslağı üret. Yalnızca geçerli JSON döndür: {\"question\":\"...\",\"options\":[\"...\",\"...\"]}. 2-5 kısa seçenek. Siyasi/kişisel hassas veri sorma."},{"role":"user","content":f"Konu: {konu.strip()}"}]},timeout=20)
+            response=requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization":f"Bearer {settings.openrouter_api_key}","Content-Type":"application/json"},
+                json={
+                    "model":settings.openrouter_model,
+                    "temperature":0.5,
+                    "max_tokens":350,
+                    "messages":[
+                        {"role":"system","content":'Türkçe Discord topluluğu için tarafsız, kısa anket taslağı üret. Yalnızca geçerli JSON döndür: {"question":"...","options":["...","..."]}. 2-5 kısa seçenek. Siyasi/kişisel hassas veri sorma.'},
+                        {"role":"user","content":f"Konu: {konu.strip()}"},
+                    ],
+                    "response_format":{"type":"json_object"},
+                },
+                timeout=25,
+            )
             response.raise_for_status()
             data=response.json()
-            return data["choices"][0]["message"]["content"]
+            choices=data.get("choices")
+            if not isinstance(choices,list) or not choices or not isinstance(choices[0],dict):
+                raise ValueError("OpenRouter response did not contain a choice")
+            message=choices[0].get("message")
+            if not isinstance(message,dict):
+                raise ValueError("OpenRouter response did not contain a message")
+            content=message.get("content")
+            if isinstance(content,list):
+                content="".join(
+                    part.get("text","") for part in content
+                    if isinstance(part,dict) and isinstance(part.get("text"),str)
+                )
+            if not isinstance(content,str) or not content.strip():
+                finish_reason=choices[0].get("finish_reason","unknown")
+                raise ValueError(f"OpenRouter returned empty text content (finish_reason={finish_reason})")
+            return content
+
         try:
             raw=await asyncio.to_thread(request_suggestion)
-            parsed=json.loads(raw[raw.find("{"):raw.rfind("}")+1])
-            question=str(parsed.get("question","")).strip()[:300]
-            options=list(dict.fromkeys(str(x).strip()[:80] for x in parsed.get("options",[]) if str(x).strip()))[:5]
-            if not question or len(options)<2: raise ValueError("AI output did not contain a valid question and options")
+            parsed=_parse_poll_suggestion(raw)
+            question=parsed["question"]
+            options=parsed["options"]
             await interaction.followup.send("Anket taslağı (henüz yayımlanmadı):\nSoru: "+question+"\nSeçenekler: "+" | ".join(options)+"\nİstersen bu metni /anket komutunda kullan.",ephemeral=True)
         except Exception:
             log.exception("AI poll suggestion failed")

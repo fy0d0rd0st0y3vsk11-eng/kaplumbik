@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import discord
-from app.events.green_embeds import send_green_response, send_green_followup, send_green_message
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message, send_green_reply
 
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -79,7 +79,7 @@ class SecurityCog(commands.Cog):
         if user is None:
             try: user=await self.bot.fetch_user(int(settings.owner_discord_id))
             except discord.HTTPException: return
-        try: await user.send(text[:1800])
+        try: await send_green_message(user, text[:1800])
         except discord.HTTPException: log.warning("Could not DM owner for security alert.")
 
     @commands.Cog.listener()

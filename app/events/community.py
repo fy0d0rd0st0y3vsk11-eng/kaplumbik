@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from app import create_app
 from app.core.config import settings
 from app.database import db
-from app.database.community_models import MemberGameProfile, CommunityPoll, CommunityPollVote, CommunitySuggestion, CommunitySuggestionVote, WeeklyQuest, WeeklyQuestProgress, RewardShopItem, MemberCollectionItem, FeaturePermission, ServerMemoryProposal
+from app.database.community_models import MemberGameProfile, CommunityPoll, CommunityPollVote, CommunitySuggestion, CommunitySuggestionVote, WeeklyQuest, WeeklyQuestProgress, RewardShopItem, MemberCollectionItem, MemberShopPreference, FeaturePermission, ServerMemoryProposal
 from app.database.models import AuditLog, EconomyTransaction, UserProfile
 from app.database.advanced_models import BotSetting
 from app.events.feature_service import get_setting
@@ -433,15 +433,110 @@ class MahzenCommunity(commands.Cog):
             items=db.session.execute(select(RewardShopItem).where(RewardShopItem.enabled.is_(True)).order_by(RewardShopItem.price).limit(20)).scalars().all()
         if not items:
             await interaction.response.send_message("Mağaza henüz kurulmamış. Yönetim panelinden ürün eklenmesi gerekiyor.",ephemeral=True); return
-        await interaction.response.send_message("Mahzen mağazası\n"+"\n\n".join(f"{x.key} — {x.title}: {x.price} puan ({x.description or 'Açıklama yok'})" for x in items),ephemeral=True)
+        type_labels={"role":"Discord rolü","cosmetic":"Unvan","badge":"Rozet","collection":"Koleksiyon"}
+        lines=[
+            f"{x.key} · {x.title} — {x.price} coin\nTür: {type_labels.get(x.item_type, x.item_type)}\n{x.description or 'Açıklama yok.'}\nSatın almak için: /dukkanal urun:{x.key}"
+            for x in items
+        ]
+        await interaction.response.send_message("Mahzen mağazası\n\n"+"\n\n".join(lines),ephemeral=True)
 
-    @app_commands.command(name="koleksiyon", description="Koleksiyon öğelerini görüntüle.")
+    @app_commands.command(name="koleksiyon", description="Sahip olduğun koleksiyon ürünlerini görüntüle.")
     async def collection(self, interaction: discord.Interaction):
         app=create_app()
         with app.app_context():
-            rows=db.session.execute(select(MemberCollectionItem).where(MemberCollectionItem.discord_id==str(interaction.user.id)).order_by(MemberCollectionItem.acquired_at.desc()).limit(50)).scalars().all()
-            lines=[f"{x.item_key} · {x.source}"+(f" · bitiş {as_utc(x.expires_at).astimezone(TR).strftime('%d.%m.%Y')}" if x.expires_at else " · kalıcı") for x in rows if not is_expired(x.expires_at)]
-        await interaction.response.send_message("Koleksiyonun\n"+("\n".join(lines) if lines else "Henüz koleksiyon öğen yok."),ephemeral=True)
+            rows=db.session.execute(
+                select(MemberCollectionItem, RewardShopItem)
+                .join(RewardShopItem, MemberCollectionItem.item_key == RewardShopItem.key)
+                .where(MemberCollectionItem.discord_id == str(interaction.user.id), RewardShopItem.item_type == "collection")
+                .order_by(MemberCollectionItem.acquired_at.desc()).limit(50)
+            ).all()
+            lines=[
+                f"**{item.title}** · {item.description or 'Açıklama yok.'}"
+                + (f" · bitiş {as_utc(owned.expires_at).astimezone(TR).strftime('%d.%m.%Y')}" if owned.expires_at else " · kalıcı")
+                for owned, item in rows if not is_expired(owned.expires_at)
+            ]
+        await interaction.response.send_message("Koleksiyonun\n"+("\n".join(lines) if lines else "Henüz koleksiyon ürünü almamışsın."),ephemeral=True)
+
+    @app_commands.command(name="envanter", description="Satın aldığın tüm mağaza ürünlerini görüntüle.")
+    async def shop_inventory(self, interaction: discord.Interaction):
+        app=create_app()
+        with app.app_context():
+            rows=db.session.execute(
+                select(MemberCollectionItem, RewardShopItem)
+                .join(RewardShopItem, MemberCollectionItem.item_key == RewardShopItem.key)
+                .where(MemberCollectionItem.discord_id == str(interaction.user.id))
+                .order_by(MemberCollectionItem.acquired_at.desc()).limit(50)
+            ).all()
+            labels={"role":"Rol","cosmetic":"Unvan","badge":"Rozet","collection":"Koleksiyon"}
+            lines=[
+                f"**{item.title}** · {labels.get(item.item_type, item.item_type)}"
+                + (f" · bitiş {as_utc(owned.expires_at).astimezone(TR).strftime('%d.%m.%Y')}" if owned.expires_at else " · kalıcı")
+                for owned, item in rows if not is_expired(owned.expires_at)
+            ]
+        await interaction.response.send_message("Mağaza envanterin\n"+("\n".join(lines) if lines else "Henüz mağazadan ürün almamışsın."),ephemeral=True)
+
+    @app_commands.command(name="rozetler", description="Sahip olduğun rozetleri görüntüle.")
+    async def shop_badges(self, interaction: discord.Interaction):
+        app=create_app()
+        with app.app_context():
+            rows=db.session.execute(
+                select(MemberCollectionItem, RewardShopItem)
+                .join(RewardShopItem, MemberCollectionItem.item_key == RewardShopItem.key)
+                .where(MemberCollectionItem.discord_id == str(interaction.user.id), RewardShopItem.item_type == "badge")
+                .order_by(MemberCollectionItem.acquired_at.desc()).limit(50)
+            ).all()
+            lines=[f"🏅 **{item.title}** — {item.description or 'Açıklama yok.'}" for owned,item in rows if not is_expired(owned.expires_at)]
+        await interaction.response.send_message("Rozetlerin\n"+("\n".join(lines) if lines else "Henüz rozetin yok."),ephemeral=True)
+
+    @app_commands.command(name="unvansec", description="Satın aldığın kozmetik unvanı seç.")
+    @app_commands.describe(urun="Envanterindeki kozmetik ürünün anahtarı")
+    async def select_shop_title(self, interaction: discord.Interaction, urun: str):
+        app=create_app()
+        with app.app_context():
+            item=db.session.execute(
+                select(RewardShopItem).where(RewardShopItem.key == urun, RewardShopItem.item_type == "cosmetic")
+            ).scalar_one_or_none()
+            if not item:
+                await interaction.response.send_message("Bu anahtarda seçilebilir bir unvan bulunamadı.",ephemeral=True); return
+            owned=db.session.execute(
+                select(MemberCollectionItem).where(
+                    MemberCollectionItem.discord_id == str(interaction.user.id),
+                    MemberCollectionItem.item_key == item.key,
+                    (MemberCollectionItem.expires_at.is_(None)) | (MemberCollectionItem.expires_at > utcnow())
+                )
+            ).scalar_one_or_none()
+            if not owned:
+                await interaction.response.send_message("Bu unvan sende yok. Önce /dukkanal ile satın al.",ephemeral=True); return
+            preference=db.session.execute(select(MemberShopPreference).where(MemberShopPreference.discord_id == str(interaction.user.id))).scalar_one_or_none()
+            if preference is None:
+                preference=MemberShopPreference(discord_id=str(interaction.user.id),active_title_key=item.key)
+                db.session.add(preference)
+            else:
+                preference.active_title_key=item.key
+            db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="shop.title_equipped",target_type="shop_item",target_id=item.key,details={"title":item.title},success=True))
+            db.session.commit()
+            title=item.title
+        await interaction.response.send_message(f"Unvanın **{title}** olarak ayarlandı. Bunu görmek için /unvanim komutunu kullan.",ephemeral=True)
+
+    @app_commands.command(name="unvanim", description="Şu an seçili kozmetik unvanını göster.")
+    async def my_shop_title(self, interaction: discord.Interaction):
+        app=create_app()
+        with app.app_context():
+            preference=db.session.execute(select(MemberShopPreference).where(MemberShopPreference.discord_id == str(interaction.user.id))).scalar_one_or_none()
+            item=None
+            if preference and preference.active_title_key:
+                item=db.session.execute(select(RewardShopItem).where(RewardShopItem.key == preference.active_title_key,RewardShopItem.item_type == "cosmetic")).scalar_one_or_none()
+                owned=db.session.execute(select(MemberCollectionItem.id).where(
+                    MemberCollectionItem.discord_id == str(interaction.user.id),
+                    MemberCollectionItem.item_key == preference.active_title_key,
+                    (MemberCollectionItem.expires_at.is_(None)) | (MemberCollectionItem.expires_at > utcnow())
+                )).scalar_one_or_none()
+                if not owned:
+                    preference.active_title_key=None
+                    db.session.commit()
+                    item=None
+            title=item.title if item else None
+        await interaction.response.send_message(f"Seçili unvanın: **{title}**" if title else "Henüz unvan seçmedin. Bir kozmetik ürün satın alıp /unvansec komutuyla seçebilirsin.",ephemeral=True)
 
     @app_commands.command(name="modulizin", description="Bir modülde rol bazlı yönetim izni ayarla (yalnızca sahip).")
     async def module_permission(self, interaction: discord.Interaction, modul: str, rol: discord.Role, yonetebilir: bool):

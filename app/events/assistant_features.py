@@ -516,13 +516,49 @@ class AssistantFeatures(commands.Cog):
                     continue
                 if current >= achievement.threshold:
                     earned.append(achievement.title)
+            from app.database.community_models import MemberCollectionItem, MemberShopPreference, RewardShopItem
+            preference = db.session.execute(
+                select(MemberShopPreference).where(MemberShopPreference.discord_id == str(member.id))
+            ).scalar_one_or_none()
+            active_title = None
+            if preference and preference.active_title_key:
+                active_title = db.session.execute(
+                    select(RewardShopItem).where(
+                        RewardShopItem.key == preference.active_title_key,
+                        RewardShopItem.item_type == "cosmetic",
+                    )
+                ).scalar_one_or_none()
+                title_owned = db.session.execute(
+                    select(MemberCollectionItem.id).where(
+                        MemberCollectionItem.discord_id == str(member.id),
+                        MemberCollectionItem.item_key == preference.active_title_key,
+                        (MemberCollectionItem.expires_at.is_(None)) | (MemberCollectionItem.expires_at > datetime.now(timezone.utc)),
+                    )
+                ).scalar_one_or_none()
+                if not title_owned:
+                    active_title = None
+                    preference.active_title_key = None
+                    db.session.commit()
+            shop_badges = db.session.execute(
+                select(RewardShopItem.title)
+                .join(MemberCollectionItem, MemberCollectionItem.item_key == RewardShopItem.key)
+                .where(
+                    MemberCollectionItem.discord_id == str(member.id),
+                    RewardShopItem.item_type == "badge",
+                    (MemberCollectionItem.expires_at.is_(None)) | (MemberCollectionItem.expires_at > datetime.now(timezone.utc)),
+                )
+                .order_by(RewardShopItem.title.asc()).limit(10)
+            ).scalars().all()
         eligible = balance >= min_points
         embed = discord.Embed(title=f"📋 {member.display_name} · Kaplumbik profili", color=discord.Color.blurple())
         embed.add_field(name="Puan", value=str(balance), inline=True)
         embed.add_field(name="Katıldığı etkinlik", value=str(len(participations)), inline=True)
         embed.add_field(name="En çok oynadığı oyun", value=most_played, inline=True)
+        if active_title:
+            embed.add_field(name="Unvan", value=active_title.title, inline=False)
         embed.add_field(name="Son etkinlik", value=last_event.title if last_event else "Henüz yok", inline=False)
-        embed.add_field(name="Rozetler", value=", ".join(earned) if earned else "Henüz rozet yok", inline=False)
+        all_badges = earned + [f"🛍️ {title}" for title in shop_badges]
+        embed.add_field(name="Rozetler", value=", ".join(all_badges) if all_badges else "Henüz rozet yok", inline=False)
         embed.add_field(name="Çekiliş uygunluğu", value="Uygun" if eligible else f"Uygun değil (en az {min_points} puan)", inline=False)
         await interaction.followup.send(embed=embed)
 

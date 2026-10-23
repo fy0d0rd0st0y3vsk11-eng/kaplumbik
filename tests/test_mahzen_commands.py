@@ -98,15 +98,16 @@ def test_member_intro_is_pending_until_owner_approval(app):
         assert saved.reviewed_by is None
 
 
-def test_directory_only_includes_approved_member_intros(app):
+def test_directory_only_includes_approved_member_intros(app, monkeypatch):
     from app.database.advanced_models import MemberIntro
-    from app.events.mahzen_commands import _get_people
+    import app.events.mahzen_commands as mahzen_commands
+    monkeypatch.setattr(mahzen_commands, "create_app", lambda: app)
     with app.app_context():
         db.session.add(MemberIntro(guild_id="12345678901234567", discord_id="23456789012345678",
                                    name="Bekleyen", info="Bekliyor", status="pending"))
         db.session.add(MemberIntro(guild_id="12345678901234567", discord_id="34567890123456789",
                                    name="Onaylı", info="Tamam", status="approved"))
         db.session.commit()
-    people = _get_people("12345678901234567")
+    people = mahzen_commands._get_people("12345678901234567")
     assert any(p["name"] == "Onaylı" for p in people)
     assert not any(p["name"] == "Bekleyen" for p in people)

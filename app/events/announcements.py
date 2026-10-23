@@ -3,6 +3,8 @@ import logging
 from datetime import timezone
 
 import discord
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message
+
 from discord.ext import commands
 
 from app.database.event_models import Event
@@ -51,7 +53,7 @@ class EventAnnouncementCog(commands.Cog):
         try:
             events = list_upcoming_events(limit=10)
             if not events:
-                await interaction.response.send_message("📭 Yaklaşan etkinlik bulunmuyor.")
+                await send_green_response(interaction, "📭 Yaklaşan etkinlik bulunmuyor.")
                 return
 
             messages = [
@@ -59,12 +61,12 @@ class EventAnnouncementCog(commands.Cog):
                 + f"\nKatılım butonları: `/etkinlik etkinlik_id:{event.id}`"
                 for event in events
             ]
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 messages[0],
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             for message in messages[1:]:
-                await interaction.followup.send(
+                await send_green_followup(interaction, 
                     message,
                     allowed_mentions=discord.AllowedMentions.none(),
                 )
@@ -72,9 +74,9 @@ class EventAnnouncementCog(commands.Cog):
             logger.exception("Could not list upcoming events.")
             error_message = "Etkinlikler yüklenirken bir hata oluştu."
             if interaction.response.is_done():
-                await interaction.followup.send(error_message, ephemeral=True)
+                await send_green_followup(interaction, error_message, ephemeral=True)
             else:
-                await interaction.response.send_message(error_message, ephemeral=True)
+                await send_green_response(interaction, error_message, ephemeral=True)
 
 
 

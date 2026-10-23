@@ -4,6 +4,8 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import discord
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message
+
 from discord import app_commands
 from discord.ext import commands, tasks
 from sqlalchemy import select
@@ -178,7 +180,7 @@ class SharedStreak(commands.Cog):
             if target:
                 await target.edit(content=content, allowed_mentions=discord.AllowedMentions.none())
             else:
-                target = await channel.send(content, allowed_mentions=discord.AllowedMentions.none())
+                target = await send_green_message(channel, content, allowed_mentions=discord.AllowedMentions.none())
                 with app.app_context():
                     fresh = db.session.execute(select(StreakDay).where(StreakDay.day == day_row.day)).scalar_one()
                     fresh.progress_message_id = str(target.id)
@@ -234,7 +236,7 @@ class SharedStreak(commands.Cog):
                     f"{status_text}\nKatkı veren farklı üye: **{count}**/{GOAL}\n"
                     f"Mevcut seri uzunluğu: **{streak} gün**\nKatkıda bulunanlar: {names}")
                 try:
-                    sent = await channel.send(content, allowed_mentions=discord.AllowedMentions.none())
+                    sent = await send_green_message(channel, content, allowed_mentions=discord.AllowedMentions.none())
                 except discord.HTTPException:
                     logger.exception("Seri günlük özeti gönderilemedi: %s", cursor)
                     return
@@ -268,7 +270,7 @@ class SharedStreak(commands.Cog):
             source_ids = sorted(get_source_channel_ids(), key=int)
         source_text = ", ".join(f"<#{item}>" for item in source_ids) or "Henüz ayarlanmamış"
         pending_text = ", ".join(day.day for day in pending[-10:]) or "Yok"
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             f"🐢 **Mahzen ortak serisi**\nBugün: **{count}/{GOAL}** farklı üye\n"
             f"Mevcut seri: **{streak} gün**\nTelafi bekleyen günler: {pending_text}\nSeri kanalı: {channel_text}\nSayılacak sohbet kanalları: {source_text}",
             ephemeral=False, allowed_mentions=discord.AllowedMentions.none(),
@@ -278,67 +280,67 @@ class SharedStreak(commands.Cog):
     @app_commands.describe(kanal="Seri ilerlemesi ve günlük özetlerin gönderileceği metin kanalı")
     async def streak_channel(self, interaction: discord.Interaction, kanal: discord.TextChannel):
         if not _is_owner_or_admin(interaction):
-            await interaction.response.send_message("Bu işlem sunucu sahibi veya Administrator yetkisi gerektirir.", ephemeral=True)
+            await send_green_response(interaction, "Bu işlem sunucu sahibi veya Administrator yetkisi gerektirir.", ephemeral=True)
             return
         permissions = kanal.permissions_for(interaction.guild.me) if interaction.guild and interaction.guild.me else None
         if permissions is None or not permissions.view_channel or not permissions.send_messages or not permissions.read_message_history:
-            await interaction.response.send_message("Botun bu kanalda Görüntüle, Mesaj Gönder ve Mesaj Geçmişini Oku izinleri olmalı.", ephemeral=True)
+            await send_green_response(interaction, "Botun bu kanalda Görüntüle, Mesaj Gönder ve Mesaj Geçmişini Oku izinleri olmalı.", ephemeral=True)
             return
         app = create_app()
         with app.app_context():
             set_channel_id(str(kanal.id), str(interaction.user.id))
-        await interaction.response.send_message(f"Seri ilerlemesi ve özet kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
+        await send_green_response(interaction, f"Seri ilerlemesi ve özet kanalı {kanal.mention} olarak ayarlandı.", ephemeral=True)
 
     @app_commands.command(name="serikaynakkanal", description="Ortak seri sayacına katkı sağlayan sohbet kanalını ekle veya çıkar.")
     @app_commands.describe(kanal="Mesajları sayılacak sohbet kanalı", ekle="True: ekle, False: çıkar")
     async def streak_source_channel(self, interaction: discord.Interaction, kanal: discord.TextChannel, ekle: bool):
         if not _is_owner_or_admin(interaction):
-            await interaction.response.send_message("Bu işlem sunucu sahibi veya Administrator yetkisi gerektirir.", ephemeral=True)
+            await send_green_response(interaction, "Bu işlem sunucu sahibi veya Administrator yetkisi gerektirir.", ephemeral=True)
             return
         permissions = kanal.permissions_for(interaction.guild.me) if interaction.guild and interaction.guild.me else None
         if ekle and (permissions is None or not permissions.view_channel or not permissions.read_message_history):
-            await interaction.response.send_message("Botun bu kaynak kanalını görüntüleme ve mesaj geçmişini okuma izinleri olmalı.", ephemeral=True)
+            await send_green_response(interaction, "Botun bu kaynak kanalını görüntüleme ve mesaj geçmişini okuma izinleri olmalı.", ephemeral=True)
             return
         app = create_app()
         with app.app_context():
             channels = set_source_channel(str(kanal.id), ekle, str(interaction.user.id))
         action = "eklendi" if ekle else "çıkarıldı"
         channel_list = ", ".join(f"<#{item}>" for item in sorted(channels, key=int)) or "Hiç kaynak kanalı yok"
-        await interaction.response.send_message(f"{kanal.mention} kaynak listesinden {action}.\nKaynak kanallar: {channel_list}", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        await send_green_response(interaction, f"{kanal.mention} kaynak listesinden {action}.\nKaynak kanallar: {channel_list}", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @app_commands.command(name="seritelafi", description="En eski değil, en son telafi bekleyen günleri telafi et.")
     @app_commands.describe(gun_sayisi="Telafi edilecek son bekleyen gün sayısı")
     async def streak_make_up(self, interaction: discord.Interaction, gun_sayisi: app_commands.Range[int, 1, 365]):
         if not _is_owner_or_admin(interaction):
-            await interaction.response.send_message("Telafi yalnızca sunucu sahibi veya Administrator yetkilisine açıktır.", ephemeral=True)
+            await send_green_response(interaction, "Telafi yalnızca sunucu sahibi veya Administrator yetkilisine açıktır.", ephemeral=True)
             return
         app = create_app()
         try:
             with app.app_context():
                 days = make_up_pending_days(int(gun_sayisi), str(interaction.user.id))
                 labels = ", ".join(row.day for row in days)
-            await interaction.response.send_message(f"✅ Telafi kaydedildi: {labels}. Seri geçmişi yeniden hesaplandı.", allowed_mentions=discord.AllowedMentions.none())
+            await send_green_response(interaction, f"✅ Telafi kaydedildi: {labels}. Seri geçmişi yeniden hesaplandı.", allowed_mentions=discord.AllowedMentions.none())
         except ValueError as exc:
-            await interaction.response.send_message(str(exc), ephemeral=True)
+            await send_green_response(interaction, str(exc), ephemeral=True)
 
     @app_commands.command(name="serikatkiduzelt", description="Bir üyenin seri katkısını düzelt (yalnızca sahip).")
     @app_commands.describe(tarih="YYYY-MM-DD", uye="Katkısı düzeltilecek üye", ekle="True ise katkı ekle, False ise kaldır", gerekce="Zorunlu denetim gerekçesi")
     async def streak_correct(self, interaction: discord.Interaction, tarih: str, uye: discord.Member, ekle: bool, gerekce: app_commands.Range[str, 3, 300]):
         if not _is_owner(interaction):
-            await interaction.response.send_message("Katkı düzeltme yalnızca sunucu sahibine açıktır.", ephemeral=True)
+            await send_green_response(interaction, "Katkı düzeltme yalnızca sunucu sahibine açıktır.", ephemeral=True)
             return
         try:
             parsed = date.fromisoformat(tarih)
         except ValueError:
-            await interaction.response.send_message("Tarih YYYY-MM-DD biçiminde olmalı.", ephemeral=True)
+            await send_green_response(interaction, "Tarih YYYY-MM-DD biçiminde olmalı.", ephemeral=True)
             return
         app = create_app()
         try:
             with app.app_context():
                 count = correct_contribution(parsed, str(uye.id), ekle, str(interaction.user.id), gerekce)
-            await interaction.response.send_message(f"Katkı düzeltildi. {tarih} için toplam farklı üye: {count}/{GOAL}.", ephemeral=True)
+            await send_green_response(interaction, f"Katkı düzeltildi. {tarih} için toplam farklı üye: {count}/{GOAL}.", ephemeral=True)
         except ValueError as exc:
-            await interaction.response.send_message(str(exc), ephemeral=True)
+            await send_green_response(interaction, str(exc), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

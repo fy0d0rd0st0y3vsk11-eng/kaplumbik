@@ -5,6 +5,8 @@ import unicodedata
 from datetime import datetime, timezone, timedelta
 
 import discord
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message
+
 import requests
 from sqlalchemy import select
 from discord.ext import commands, tasks
@@ -449,9 +451,9 @@ class AssistantFeatures(commands.Cog):
         if not owner_id or not owner_id.isdigit():
             owner_id = settings.owner_discord_id
         if owner_id and owner_id.isdigit():
-            await interaction.response.send_message(f"🐢 Kaplumbik'i tasarlayan kişi: <@{owner_id}>", allowed_mentions=discord.AllowedMentions(users=[discord.Object(id=int(owner_id))], roles=False, everyone=False))
+            await send_green_response(interaction, f"🐢 Kaplumbik'i tasarlayan kişi: <@{owner_id}>", allowed_mentions=discord.AllowedMentions(users=[discord.Object(id=int(owner_id))], roles=False, everyone=False))
         else:
-            await interaction.response.send_message("Tasarımcı Discord ID'si henüz yönetim panelinde ayarlanmamış.")
+            await send_green_response(interaction, "Tasarımcı Discord ID'si henüz yönetim panelinde ayarlanmamış.")
 
     @discord.app_commands.command(name="tanit", description="Listeden bir Mahzen üyesi seçip tanıtımını oku.")
     async def introduce_member(self, interaction: discord.Interaction):
@@ -462,12 +464,12 @@ class AssistantFeatures(commands.Cog):
                 select(PersonProfile).order_by(PersonProfile.name.asc()).limit(1000)
             ).scalars().all()
         if not people:
-            await interaction.response.send_message(
+            await send_green_response(interaction, 
                 "Henüz kişi tanıtımı eklenmemiş. Yönetim panelindeki Kişi tanıtımları bölümünden eklenebilir.",
                 ephemeral=True,
             )
             return
-        await interaction.response.send_message(
+        await send_green_response(interaction, 
             "Kimi merak ettin? Listeden seç, tanıtımını göstereyim. 🐢",
             view=PersonSelectView(people),
             ephemeral=True,
@@ -546,7 +548,7 @@ class AssistantFeatures(commands.Cog):
         embed.add_field(name="Mağaza rozetleri", value=(", ".join(purchased_badges[:15])[:1000] if purchased_badges else "Henüz satın alınmış rozet yok"), inline=False)
         embed.add_field(name="Koleksiyon", value=(", ".join(collection_items[:15])[:1000] if collection_items else "Henüz koleksiyon ürünü yok"), inline=False)
         embed.add_field(name="Çekiliş uygunluğu", value="Uygun" if eligible else f"Uygun değil (en az {min_points} puan)", inline=False)
-        await interaction.followup.send(embed=embed)
+        await send_green_followup(interaction, embed=embed)
 
     @discord.app_commands.command(name="etkinlikgecmisi", description="Bir etkinliğin katılım kayıtlarını gösterir.")
     async def event_history(self, interaction: discord.Interaction, event_id: int):
@@ -557,12 +559,12 @@ class AssistantFeatures(commands.Cog):
             rows = db.session.query(EventParticipation).filter_by(event_id=event_id).all()
             event = db.session.get(Event, event_id)
             if event is None:
-                await interaction.followup.send("Bu etkinlik bulunamadı.")
+                await send_green_followup(interaction, "Bu etkinlik bulunamadı.")
                 return
             going = [f"<@{r.discord_id}>" for r in rows if r.status == "going"]
             not_going = [f"<@{r.discord_id}>" for r in rows if r.status == "not_going"]
             content = f"**{event.title}**\nKatılacağım ({len(going)}): {', '.join(going) or 'yok'}\nKatılmayacağım ({len(not_going)}): {', '.join(not_going) or 'yok'}"
-            await interaction.followup.send(content[:1900], allowed_mentions=discord.AllowedMentions.none())
+            await send_green_followup(interaction, content[:1900], allowed_mentions=discord.AllowedMentions.none())
 
 
 
@@ -577,7 +579,7 @@ class AssistantFeatures(commands.Cog):
             else: preference.enabled=True
             db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_opt_in",target_type="member",target_id=str(interaction.user.id),details={"guild_id":guild_id},success=True))
             db.session.commit()
-        await interaction.response.send_message("Kişisel AI hafızan açıldı. Yalnızca Kaplumbik'e doğrudan yazdığın mesajlar bu sunucuda senin hesabınla ilişkilendirilebilir; /hafizami ile görebilir, /hafiziyikapat ile kapatıp silebilirsin.",ephemeral=True)
+        await send_green_response(interaction, "Kişisel AI hafızan açıldı. Yalnızca Kaplumbik'e doğrudan yazdığın mesajlar bu sunucuda senin hesabınla ilişkilendirilebilir; /hafizami ile görebilir, /hafiziyikapat ile kapatıp silebilirsin.",ephemeral=True)
 
     @discord.app_commands.command(name="hafiziyikapat", description="Kişisel AI hafızanı kapat ve bu sunucudaki kayıtlarını sil.")
     async def disable_my_memory(self, interaction: discord.Interaction):
@@ -593,7 +595,7 @@ class AssistantFeatures(commands.Cog):
             for row in rows: db.session.delete(row)
             db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_opt_out_delete",target_type="member",target_id=str(interaction.user.id),details={"guild_id":guild_id,"deleted_rows":deleted},success=True))
             db.session.commit()
-        await interaction.response.send_message(f"Kişisel AI hafızan kapatıldı ve {deleted} kayıt silindi.",ephemeral=True)
+        await send_green_response(interaction, f"Kişisel AI hafızan kapatıldı ve {deleted} kayıt silindi.",ephemeral=True)
 
     @discord.app_commands.command(name="hafizami", description="Kaplumbik'in senin için sakladığı konuşma hafızasının özetini göster.")
     async def my_memory(self, interaction: discord.Interaction):
@@ -605,7 +607,7 @@ class AssistantFeatures(commands.Cog):
             count=db.session.scalar(select(func.count(ConversationMemory.id)).where(ConversationMemory.guild_id==str(interaction.guild_id or "dm"),ConversationMemory.discord_id==str(interaction.user.id))) or 0
             recent=db.session.execute(select(ConversationMemory).where(ConversationMemory.guild_id==str(interaction.guild_id or "dm"),ConversationMemory.discord_id==str(interaction.user.id)).order_by(ConversationMemory.created_at.desc()).limit(5)).scalars().all()
             snippets=[f"{row.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d')} · {row.role}: {row.content[:100]}" for row in recent]
-        await interaction.response.send_message(f"Kişisel hafıza: {'açık' if enabled else 'kapalı'}. Seninle doğrudan Kaplumbik arasındaki kayıtlı satır: {count}.\nSon kayıtlar:\n"+("\n".join(snippets) if snippets else "Kayıt yok.")+"\nKayıtlarını temizlemek için /hafizamitemizle kullan.",ephemeral=True)
+        await send_green_response(interaction, f"Kişisel hafıza: {'açık' if enabled else 'kapalı'}. Seninle doğrudan Kaplumbik arasındaki kayıtlı satır: {count}.\nSon kayıtlar:\n"+("\n".join(snippets) if snippets else "Kayıt yok.")+"\nKayıtlarını temizlemek için /hafizamitemizle kullan.",ephemeral=True)
 
     @discord.app_commands.command(name="hafizamitemizle", description="Yalnızca kendi konuşma hafızanı sil.")
     async def clear_my_memory(self, interaction: discord.Interaction):
@@ -621,7 +623,7 @@ class AssistantFeatures(commands.Cog):
             for row in rows: db.session.delete(row)
             db.session.add(AuditLog(actor_discord_id=str(interaction.user.id),action="ai.memory_self_delete",target_type="conversation_memory",target_id=str(interaction.user.id),details={"deleted_rows":deleted},success=True))
             db.session.commit()
-        await interaction.response.send_message(f"Kendi konuşma hafızandan {deleted} kayıt silindi ve kişisel hafıza kapatıldı.",ephemeral=True)
+        await send_green_response(interaction, f"Kendi konuşma hafızandan {deleted} kayıt silindi ve kişisel hafıza kapatıldı.",ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

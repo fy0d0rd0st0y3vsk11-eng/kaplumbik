@@ -494,7 +494,7 @@ class MahzenCommunity(commands.Cog):
         app=create_app()
         with app.app_context():
             item=db.session.execute(
-                select(RewardShopItem).where(RewardShopItem.key == urun, RewardShopItem.item_type == "cosmetic", RewardShopItem.enabled.is_(True))
+                select(RewardShopItem).where(RewardShopItem.key == urun, RewardShopItem.item_type == "cosmetic")
             ).scalar_one_or_none()
             if not item:
                 await interaction.response.send_message("Bu anahtarda seçilebilir bir unvan bulunamadı.",ephemeral=True); return

@@ -84,3 +84,30 @@ def test_dashboard_local_time_displays_turkey_time():
     assert advanced_local_time(naive_utc_value) == "01.01.2030 21:00"
     assert main_local_time(utc_value) == "01.01.2030 21:00"
     assert main_local_time(naive_utc_value) == "01.01.2030 21:00"
+
+
+def test_member_intro_is_pending_until_owner_approval(app):
+    from app.database.advanced_models import MemberIntro
+    with app.app_context():
+        row = MemberIntro(guild_id="12345678901234567", discord_id="23456789012345678",
+                          name="Fedya", info="Oyun ve kodlama seviyorum.")
+        db.session.add(row)
+        db.session.commit()
+        saved = db.session.get(MemberIntro, row.id)
+        assert saved.status == "pending"
+        assert saved.reviewed_by is None
+
+
+def test_directory_only_includes_approved_member_intros(app, monkeypatch):
+    from app.database.advanced_models import MemberIntro
+    import app.events.mahzen_commands as mahzen_commands
+    monkeypatch.setattr(mahzen_commands, "create_app", lambda: app)
+    with app.app_context():
+        db.session.add(MemberIntro(guild_id="12345678901234567", discord_id="23456789012345678",
+                                   name="Bekleyen", info="Bekliyor", status="pending"))
+        db.session.add(MemberIntro(guild_id="12345678901234567", discord_id="34567890123456789",
+                                   name="Onaylı", info="Tamam", status="approved"))
+        db.session.commit()
+    people = mahzen_commands._get_people("12345678901234567")
+    assert any(p["name"] == "Onaylı" for p in people)
+    assert not any(p["name"] == "Bekleyen" for p in people)

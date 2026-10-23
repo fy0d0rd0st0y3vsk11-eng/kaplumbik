@@ -2,7 +2,7 @@
 import logging
 
 import discord
-from app.events.green_embeds import send_green_response, send_green_followup, send_green_message
+from app.events.green_embeds import send_green_response, send_green_followup, send_green_message, send_green_reply, edit_green_response
 
 from discord.ext import commands
 
@@ -68,7 +68,7 @@ class EventRSVPView(discord.ui.View):
                 return ", ".join(shown) if shown else "Henüz yanıt yok"
             embed.add_field(name=f"Katılacağım ({len(summary['going'])})", value=member_list(summary["going"]), inline=False)
             embed.add_field(name=f"Katılmayacağım ({len(summary['not_going'])})", value=member_list(summary["not_going"]), inline=False)
-            await interaction.response.edit_message(embed=embed, view=self, allowed_mentions=discord.AllowedMentions.none())
+            await edit_green_response(interaction, embed=embed, view=self, allowed_mentions=discord.AllowedMentions.none())
             await send_green_followup(interaction, message, ephemeral=True)
 
         except EventNotFoundError:

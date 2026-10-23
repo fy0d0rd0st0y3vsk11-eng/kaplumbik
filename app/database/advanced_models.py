@@ -121,3 +121,20 @@ class ConversationMemory(db.Model):
         db.Index("ix_conversation_member_time", "guild_id", "discord_id", "created_at"),
     )
 
+
+
+class MemberIntro(db.Model):
+    """Member-submitted self-introduction; only owner-approved entries are public."""
+    __tablename__ = "mahzen_member_intros"
+    id = db.Column(db.Integer, primary_key=True)
+    guild_id = db.Column(db.String(25), nullable=False, index=True)
+    discord_id = db.Column(db.String(25), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    info = db.Column(db.String(1000), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+    reviewed_by = db.Column(db.String(25), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+    __table_args__ = (
+        db.UniqueConstraint("guild_id", "discord_id", name="uq_mahzen_member_intro_guild_user"),
+    )

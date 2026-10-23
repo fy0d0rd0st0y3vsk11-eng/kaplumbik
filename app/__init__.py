@@ -46,6 +46,7 @@ def create_app(test_config=None):
     from app.dashboard import dashboard_bp
     from app.dashboard import routes as dashboard_routes
     from app.dashboard import advanced_routes  # noqa: F401
+    from app.dashboard import shop_routes  # noqa: F401
 
     dashboard_routes.oauth.init_app(app)
     app.register_blueprint(dashboard_bp)
